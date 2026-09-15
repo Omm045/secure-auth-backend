@@ -6,7 +6,9 @@ from app.config import settings
 
 def create_session(user_id):
     raw=token(); now=datetime.now(timezone.utc); exp=now+timedelta(minutes=settings.access_token_expire_minutes)
-    with transaction() as c:c.execute("INSERT INTO sessions VALUES(?,?,?,?,?,0)",(token(),user_id,token_hash(raw),exp.isoformat(),now.isoformat()))
+    with transaction() as c:
+        c.execute("INSERT INTO sessions(id,user_id,token_hash,expires_at,created_at,revoked) VALUES(?,?,?,?,?,0)",
+                  (token(),user_id,token_hash(raw),exp.isoformat(),now.isoformat()))
     return raw,exp
 
 def current_user(request:Request):

@@ -1,11 +1,64 @@
+"""Distributed rate limiting with an intentionally explicit local fallback."""
 import time
-from collections import defaultdict,deque
-from fastapi import HTTPException,Request
-_hits=defaultdict(deque)
-def enforce_rate_limit(request:Request,limit:int, on_limited=None):
-    key=request.client.host if request.client else "unknown"; now=time.monotonic(); q=_hits[key]
-    while q and now-q[0]>60: q.popleft()
-    if len(q)>=limit:
-        if on_limited: on_limited()
-        raise HTTPException(429,"Too many requests")
-    q.append(now)
+from collections import defaultdict, deque
+from fastapi import HTTPException, Request
+
+from app.config import settings
+
+_hits: dict[str, deque[float]] = defaultdict(deque)  # compatibility/test hook
+_redis = None
+
+
+def _redis_client():
+    global _redis
+    if _redis is not None:
+        return _redis
+    if not settings.redis_url:
+        return None
+    try:
+        import redis
+        _redis = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        _redis.ping()
+        return _redis
+    except Exception:
+        if settings.environment == "production":
+            raise HTTPException(503, "Rate limiting unavailable")
+        return None
+
+
+def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str = "request",
+                       identity: str | None = None):
+    dimensions = [f"ip:{request.client.host if request.client else 'unknown'}"]
+    if identity:
+        dimensions.append(f"account:{identity.strip().lower()}")
+    key = f"{scope}:" + "|".join(dimensions)
+    try:
+        client = _redis_client()
+    except HTTPException:
+        raise
+    if client is not None:
+        try:
+            count = int(client.incr(key))
+            if count == 1:
+                client.expire(key, 60)
+            if count > limit:
+                if on_limited:
+                    on_limited()
+                raise HTTPException(429, "Too many requests", headers={"Retry-After": "60"})
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            if settings.environment == "production":
+                raise HTTPException(503, "Rate limiting unavailable")
+    if settings.environment == "production":
+        raise HTTPException(503, "Rate limiting unavailable")
+    now = time.monotonic()
+    queue = _hits[key]
+    while queue and now - queue[0] > 60:
+        queue.popleft()
+    if len(queue) >= limit:
+        if on_limited:
+            on_limited()
+        raise HTTPException(429, "Too many requests", headers={"Retry-After": "60"})
+    queue.append(now)

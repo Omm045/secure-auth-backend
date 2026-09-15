@@ -13,8 +13,18 @@ def issue_reset_token(user_id: int, email: str) -> None:
     raw = token()
     now = datetime.now(timezone.utc)
     with transaction() as connection:
+        recent = connection.execute(
+            "SELECT created_at FROM password_resets WHERE user_id=? ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if recent:
+            created = datetime.fromisoformat(recent["created_at"])
+            if (now - created).total_seconds() < settings.reset_cooldown_seconds:
+                return
+        # A new request invalidates every previous reset token for this account.
+        connection.execute("UPDATE password_resets SET used=1 WHERE user_id=? AND used=0", (user_id,))
         connection.execute(
-            "INSERT INTO password_resets VALUES(?,?,?,?,0,?)",
+            "INSERT INTO password_resets(id,user_id,token_hash,expires_at,used,created_at) VALUES(?,?,?,?,0,?)",
             (
                 token(),
                 user_id,
