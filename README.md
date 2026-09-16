@@ -10,6 +10,8 @@ Copy `.env.example` to `.env`; SQLite is the default. Clients may query HIBP usi
 `SESSION_COOKIE_SECURE=true`, restrictive HTTPS CORS, `REDIS_URL`, and a
 production database. SMTP settings (`EMAIL_PROVIDER`, `SMTP_HOST`,
 `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM`) are also required.
+Production Redis must use a TLS `rediss://` URL; the Compose Redis service is
+development/test-only and intentionally uses plain internal networking.
 Production rate limiting fails closed if Redis is unavailable; development/test
 uses an in-process fallback. SMTP delivery is used for reset and verification
 messages. Newly registered users have reduced access until they verify their

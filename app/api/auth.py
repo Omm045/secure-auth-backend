@@ -43,6 +43,7 @@ def set_session(response,raw,exp): set_session_cookie(response, raw, exp)
 @router.post("/register",status_code=201)
 def register(data:Credentials,request:Request,response:Response,background_tasks: BackgroundTasks):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="register",identity=str(data.email)); reject_password(data.password)
+    password_hash = hash_password(data.password)
     try:
         with transaction() as c:
             email = data.email.lower()
@@ -50,7 +51,7 @@ def register(data:Credentials,request:Request,response:Response,background_tasks
                 return {"message": "If registration is available, verification instructions will be sent"}
             role = "user"
             c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,FALSE)",
-                      (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
+                      (email,password_hash,datetime.now(timezone.utc).isoformat(),role))
             uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
     except (sqlite3.IntegrityError, UniqueViolation):
         return {"message": "If registration is available, verification instructions will be sent"}

@@ -18,6 +18,13 @@ if count == 1 then
 end
 return count
 """
+_ACCOUNT_FAILURE_CHECK = """
+local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+if count >= tonumber(ARGV[1]) then
+  return count
+end
+return count
+"""
 
 
 def _increment_with_ttl(client, key: str) -> int:
@@ -93,7 +100,10 @@ def enforce_account_failure_limit(email: str, limit: int) -> None:
     client = _redis_client()
     if client is not None:
         try:
-            count = int(client.get(redis_key) or 0)
+            if hasattr(client, "eval"):
+                count = int(client.eval(_ACCOUNT_FAILURE_CHECK, 1, redis_key, threshold))
+            else:
+                count = int(client.get(redis_key) or 0)
             if count >= threshold:
                 logger.warning("Account failed-attempt limit rejected")
                 raise HTTPException(429, "Too many failed attempts", headers={"Retry-After": "60"})
