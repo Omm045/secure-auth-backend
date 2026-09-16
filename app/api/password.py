@@ -20,14 +20,17 @@ class Reset(BaseModel):
     token: str = Field(min_length=20, max_length=256)
     new_password: str = Field(max_length=128)
 DUMMY_RESET_HASH = "$argon2id$v=19$m=65536,t=3,p=4$u7Pu1zpy3Um6fOGyEpJIfA$HYGl3GFHFglhpCKLF2UHfunnxAzAzyCa8tBXLHS49sA"
+
+def _forgot_task(row, email: str) -> None:
+    verify_password("timing-only-password", DUMMY_RESET_HASH)
+    if row:
+        issue_reset_token(row["id"], email)
+
 @router.post("/forgot")
 def forgot(data:Email,request:Request,background_tasks: BackgroundTasks):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="forgot",identity=str(data.email))
     with transaction() as c: row=c.execute("SELECT id FROM users WHERE email=?",(data.email.lower(),)).fetchone()
-    if row:
-        background_tasks.add_task(issue_reset_token, row["id"], data.email.lower())
-    else:
-        verify_password("timing-only-password", DUMMY_RESET_HASH)
+    background_tasks.add_task(_forgot_task, row, data.email.lower())
     return {"message":"If the account exists, reset instructions were sent"}
 @router.post("/reset")
 def reset(data:Reset,request:Request):

@@ -66,7 +66,6 @@ def login(data:Credentials,request:Request,response:Response):
     password_hash = row["password_hash"] if row else DUMMY_PASSWORD_HASH
     password_valid = verify_password(data.password, password_hash)
     if not row or row["disabled"] or not password_valid:
-        record_account_failure(str(data.email))
         if row: audit(row["id"],"login_failure",request.client.host if request.client else None)
         raise HTTPException(401,"Invalid credentials")
     clear_account_failures(str(data.email))

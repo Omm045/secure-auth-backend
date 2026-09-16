@@ -23,3 +23,13 @@ def configure_logging():
 
 def request_id() -> str:
     return str(uuid.uuid4())
+
+def trusted_request_id(value: str | None) -> str:
+    if value:
+        try:
+            parsed = uuid.UUID(value)
+            if str(parsed) == value.lower():
+                return value
+        except ValueError:
+            pass
+    return request_id()

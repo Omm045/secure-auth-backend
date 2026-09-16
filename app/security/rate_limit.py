@@ -19,9 +19,19 @@ end
 return count
 """
 _ACCOUNT_FAILURE_CHECK = """
-local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
 if count >= tonumber(ARGV[1]) then
-  return count
+  return -count
+end
+return count
+"""
+_ACCOUNT_FAILURE_RECORD = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
 end
 return count
 """
@@ -92,7 +102,7 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
     queue.append(now)
 
 
-def enforce_account_failure_limit(email: str, limit: int) -> None:
+def enforce_account_failure_limit(email: str, limit: int) -> int:
     """Check only failed-login events, avoiding account lockout by successes."""
     key = hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
     redis_key = f"account-failures:{key}"
@@ -101,13 +111,13 @@ def enforce_account_failure_limit(email: str, limit: int) -> None:
     if client is not None:
         try:
             if hasattr(client, "eval"):
-                count = int(client.eval(_ACCOUNT_FAILURE_CHECK, 1, redis_key, threshold))
+                count = int(client.eval(_ACCOUNT_FAILURE_CHECK, 1, redis_key, threshold, 60))
             else:
                 count = int(client.get(redis_key) or 0)
-            if count >= threshold:
+            if count < 0 or count >= threshold:
                 logger.warning("Account failed-attempt limit rejected")
                 raise HTTPException(429, "Too many failed attempts", headers={"Retry-After": "60"})
-            return
+            return count
         except HTTPException:
             raise
         except Exception:
@@ -122,22 +132,24 @@ def enforce_account_failure_limit(email: str, limit: int) -> None:
     if len(queue) >= threshold:
         logger.warning("Account failed-attempt limit rejected")
         raise HTTPException(429, "Too many failed attempts", headers={"Retry-After": "60"})
+    queue.append(now)
+    return len(queue)
 
 
-def record_account_failure(email: str) -> None:
+def record_account_failure(email: str) -> int:
     key = hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
     client = _redis_client()
     if client is not None:
         try:
             redis_key = f"account-failures:{key}"
-            _increment_with_ttl(client, redis_key)
-            return
+            return int(client.eval(_ACCOUNT_FAILURE_RECORD, 1, redis_key, 60)) if hasattr(client, "eval") else _increment_with_ttl(client, redis_key)
         except Exception:
             if settings.environment == "production":
                 raise HTTPException(503, "Rate limiting unavailable")
     if settings.environment == "production":
         raise HTTPException(503, "Rate limiting unavailable")
     _account_failures[key].append(time.monotonic())
+    return len(_account_failures[key])
 
 
 def clear_account_failures(email: str) -> None:
@@ -153,3 +165,11 @@ def clear_account_failures(email: str) -> None:
     if settings.environment == "production":
         raise HTTPException(503, "Rate limiting unavailable")
     _account_failures.pop(key, None)
+
+def close_redis() -> None:
+    global _redis
+    if _redis is not None:
+        close = getattr(_redis, "close", None)
+        if close:
+            close()
+        _redis = None

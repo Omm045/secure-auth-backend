@@ -1,5 +1,6 @@
 """Typed, fail-closed application configuration."""
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
                 raise ValueError("SECRET_KEY must be a random value of at least 32 characters in production")
             if not self.session_cookie_secure:
                 raise ValueError("SESSION_COOKIE_SECURE must be true in production")
-            if not self.cors_origins or any(not origin.startswith("https://") for origin in self.cors_origins):
+            if not self.cors_origins or any(not _https_url(origin, allow_path=False) for origin in self.cors_origins):
                 raise ValueError("production CORS origins must be explicit HTTPS origins")
             if not self.redis_url:
                 raise ValueError("REDIS_URL is required in production")
@@ -72,14 +73,30 @@ class Settings(BaseSettings):
             if not all((self.email_provider, self.smtp_host, self.smtp_username,
                         self.smtp_password, self.email_from)):
                 raise ValueError("SMTP email settings are required in production")
-            if not self.app_base_url.startswith("https://"):
+            if not _https_url(self.app_base_url):
                 raise ValueError("APP_BASE_URL must be an HTTPS URL in production")
-            if not self.hibp_api_url.startswith("https://"):
+            if not _https_url(self.hibp_api_url):
                 raise ValueError("HIBP_API_URL must be an HTTPS URL in production")
             frontend_url = self.frontend_base_url or self.app_base_url
-            if not frontend_url.startswith("https://"):
+            if not _https_url(frontend_url):
                 raise ValueError("FRONTEND_BASE_URL must be an HTTPS URL in production")
         return self
+
+
+def _https_url(value: str, allow_path: bool = True) -> bool:
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and not parsed.username
+            and not parsed.password
+            and (allow_path or parsed.path in ("", "/"))
+            and not parsed.query
+            and not parsed.fragment
+        )
+    except ValueError:
+        return False
 
 
 settings = Settings()

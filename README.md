@@ -12,6 +12,10 @@ production database. SMTP settings (`EMAIL_PROVIDER`, `SMTP_HOST`,
 `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM`) are also required.
 Production Redis must use a TLS `rediss://` URL; the Compose Redis service is
 development/test-only and intentionally uses plain internal networking.
+Run `python -m scripts.migrate` as a deployment step before starting production
+replicas. Production startup does not run Alembic migrations, avoiding competing
+migration runners; development and test startup continues to initialize the
+schema automatically.
 Production rate limiting fails closed if Redis is unavailable; development/test
 uses an in-process fallback. SMTP delivery is used for reset and verification
 messages. Newly registered users have reduced access until they verify their
@@ -47,6 +51,10 @@ exist because this is not a durable external queue. Redis rate-limit counters
 use atomic increment/expiry scripting when supported, and production Redis
 failures fail closed. HIBP endpoints must use HTTPS, and API credential/token
 fields are length-bounded.
+The bundled frontend is served at `/app`; set `FRONTEND_BASE_URL` to the
+complete deployed base including `/app` (for example,
+`https://auth.example.com/app`) so email links resolve to `/app/reset.html`
+and `/app/verify.html`.
 
 ## Test
 `python -m pytest -q`
