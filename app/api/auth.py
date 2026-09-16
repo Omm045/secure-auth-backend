@@ -1,7 +1,7 @@
 from datetime import datetime,timedelta,timezone
 import sqlite3
 from fastapi import APIRouter,Request,Response,HTTPException,Depends,BackgroundTasks
-from pydantic import BaseModel,EmailStr
+from pydantic import BaseModel,EmailStr,Field
 from app.database.connection import transaction
 from app.security.hashing import hash_password,verify_password
 from app.services.password_policy import validate_password,is_password_compromised
@@ -31,8 +31,13 @@ def reject_password(password, user_id=None):
     if is_password_compromised(password) or breached:
         if user_id: audit(user_id,"password_breach")
         raise HTTPException(422,"Password has appeared in a breach")
-class Credentials(BaseModel): email:EmailStr; password:str
-class PasswordChange(BaseModel): current_password:str; new_password:str
+class Credentials(BaseModel):
+    email: EmailStr = Field(max_length=320)
+    password: str = Field(max_length=128)
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(max_length=128)
 
 def set_session(response,raw,exp): set_session_cookie(response, raw, exp)
 @router.post("/register",status_code=201)
@@ -73,7 +78,7 @@ def logout(request:Request,response:Response):
 def me(user=Depends(current_user)): return {"id":user["id"],"email":user["email"],"email_verified":bool(user["email_verified"])}
 
 class VerificationRequest(BaseModel):
-    token_value: str
+    token_value: str = Field(min_length=20, max_length=256)
 
 @router.post("/verify-email")
 def verify_email(data: VerificationRequest, request: Request):

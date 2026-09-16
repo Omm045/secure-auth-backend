@@ -1,5 +1,6 @@
 from app.services.breach_checker import BreachChecker
 import hashlib
+import pytest
 class Resp:
     def __init__(self,text): self.text=text
     def raise_for_status(self): pass
@@ -27,3 +28,7 @@ def test_hibp_negative_malformed_and_api_failure():
     import pytest
     with pytest.raises(TimeoutError):
         BreachChecker(FailingClient(), "https://example/").is_breached(pw)
+
+def test_hibp_endpoint_must_use_https():
+    with pytest.raises(ValueError, match="HTTPS"):
+        BreachChecker(Client(""), "http://example.test/")

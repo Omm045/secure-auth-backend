@@ -11,6 +11,22 @@ logger = logging.getLogger("secure_auth.security")
 _hits: dict[str, deque[float]] = defaultdict(deque)  # compatibility/test hook
 _account_failures: dict[str, deque[float]] = defaultdict(deque)
 _redis = None
+_ATOMIC_INCREMENT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
+
+
+def _increment_with_ttl(client, key: str) -> int:
+    if hasattr(client, "eval"):
+        return int(client.eval(_ATOMIC_INCREMENT, 1, key, 60))
+    count = int(client.incr(key))
+    if count == 1:
+        client.expire(key, 60)
+    return count
 
 
 def _redis_client():
@@ -43,9 +59,7 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
         raise
     if client is not None:
         try:
-            count = int(client.incr(key))
-            if count == 1:
-                client.expire(key, 60)
+            count = _increment_with_ttl(client, key)
             if count > limit:
                 if on_limited:
                     on_limited()
@@ -106,9 +120,7 @@ def record_account_failure(email: str) -> None:
     if client is not None:
         try:
             redis_key = f"account-failures:{key}"
-            count = client.incr(redis_key)
-            if count == 1:
-                client.expire(redis_key, 60)
+            _increment_with_ttl(client, redis_key)
             return
         except Exception:
             if settings.environment == "production":
