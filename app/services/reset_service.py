@@ -40,7 +40,7 @@ def issue_verification_token(user_id: int, email: str) -> None:
     raw = token()
     now = datetime.now(timezone.utc)
     with transaction() as connection:
-        connection.execute("UPDATE email_verification_tokens SET used=1 WHERE user_id=? AND used=0", (user_id,))
+        connection.execute("UPDATE email_verification_tokens SET used=TRUE WHERE user_id=? AND used=FALSE", (user_id,))
         connection.execute(
             "INSERT INTO email_verification_tokens(id,user_id,token_hash,expires_at,used,created_at) VALUES(?,?,?,?,0,?)",
             (token(), user_id, token_hash(raw),
@@ -62,7 +62,7 @@ def issue_reset_token(user_id: int, email: str) -> None:
             if (now - created).total_seconds() < settings.reset_cooldown_seconds:
                 return
         # A new request invalidates every previous reset token for this account.
-        connection.execute("UPDATE password_resets SET used=1 WHERE user_id=? AND used=0", (user_id,))
+        connection.execute("UPDATE password_resets SET used=TRUE WHERE user_id=? AND used=FALSE", (user_id,))
         connection.execute(
             "INSERT INTO password_resets(id,user_id,token_hash,expires_at,used,created_at) VALUES(?,?,?,?,0,?)",
             (

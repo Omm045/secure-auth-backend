@@ -30,7 +30,7 @@ def test_disabled_login_and_last_login():
     with TestClient(app) as c:
         c.post('/auth/register',json={'email':'disabled@example.com','password':'abcdefgh'})
     with transaction() as db:
-        db.execute("UPDATE users SET disabled=1 WHERE email='disabled@example.com'")
+        db.execute("UPDATE users SET disabled=TRUE WHERE email='disabled@example.com'")
     with TestClient(app) as c:
         assert c.post('/auth/login',json={'email':'disabled@example.com','password':'abcdefgh'}).status_code == 401
 
