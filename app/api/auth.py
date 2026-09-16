@@ -48,7 +48,7 @@ def register(data:Credentials,request:Request,response:Response):
     return {"id":uid,"email":data.email.lower(),"email_verified":False}
 @router.post("/login")
 def login(data:Credentials,request:Request,response:Response):
-    enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login")
+    enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login",identity=str(data.email))
     enforce_account_failure_limit(str(data.email), settings.rate_limit_per_minute)
     with transaction() as c: row=c.execute("SELECT * FROM users WHERE email=?",(data.email.lower(),)).fetchone()
     if not row or row["disabled"] or not verify_password(data.password,row["password_hash"]):
