@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Secure account</title>
+<script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
+<style>body{font:16px system-ui;max-width:32rem;margin:3rem auto}form{display:grid;gap:.6rem;margin:2rem 0}meter{width:100%}</style>
+<h1>Secure account</h1>
+<form id="signup"><h2>Sign up</h2><input name="email" type="email" required placeholder="Email"><input id="signup-password" name="password" type="password" minlength="8" required placeholder="Password"><meter id="strength" min="0" max="4" value="0"></meter><button>Sign up</button></form>
+<form id="reset"><h2>Reset password</h2><input name="token" required placeholder="Reset token"><input id="reset-password" name="new_password" type="password" minlength="8" required placeholder="New password"><button>Reset password</button></form>
+<script>
+const passwordInputs=[document.querySelector('#signup-password'),document.querySelector('#reset-password')];
+passwordInputs.forEach(input=>input.addEventListener('input',()=>{if(input===passwordInputs[0]) document.querySelector('#strength').value=zxcvbn(input.value).score}));
+async function submit(form,url){const data=Object.fromEntries(new FormData(form)); const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); alert((await r.json()).message||'Request completed');}
+signup.onsubmit=e=>{e.preventDefault();submit(e.target,'/auth/register')}; reset.onsubmit=e=>{e.preventDefault();submit(e.target,'/password/reset')};
+</script>
