@@ -25,6 +25,9 @@ is provided in `frontend/index.html`; server-side policy and breach checks
 remain authoritative.
 CI runs the complete test suite against both SQLite and the Docker Compose
 PostgreSQL/Redis services.
+Alembic migrations are the single schema source of truth; the previously
+unused SQLAlchemy model files were removed rather than maintaining mappings
+that were not used by the query layer.
 
 ## Test
 `python -m pytest -q`
