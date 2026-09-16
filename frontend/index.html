@@ -10,6 +10,7 @@
 <script>
 const passwordInputs=[document.querySelector('#signup-password'),document.querySelector('#reset-password')];
 passwordInputs.forEach(input=>input.addEventListener('input',()=>{if(input===passwordInputs[0]) document.querySelector('#strength').value=zxcvbn(input.value).score}));
-async function submit(form,url){const data=Object.fromEntries(new FormData(form)); const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); alert((await r.json()).message||'Request completed');}
+async function csrf(){const r=await fetch('/csrf'); if(!r.ok) throw new Error('Unable to initialize CSRF protection'); return (await r.json()).csrf_token}
+async function submit(form,url){const data=Object.fromEntries(new FormData(form)); const headers={'Content-Type':'application/json'}; if(url==='/password/reset') headers['X-CSRF-Token']=await csrf(); const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(data)}); alert((await r.json()).message||'Request completed');}
 signup.onsubmit=e=>{e.preventDefault();submit(e.target,'/auth/register')}; reset.onsubmit=e=>{e.preventDefault();submit(e.target,'/password/reset')};
 </script>
