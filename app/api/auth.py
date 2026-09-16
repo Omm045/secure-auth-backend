@@ -15,6 +15,7 @@ from app.security.csrf import verify_csrf
 from app.config import settings
 from app.security.cookies import set_session_cookie, clear_session_cookie
 from app.services.reset_service import issue_verification_token
+from app.security.tokens import token_hash
 router=APIRouter(prefix="/auth",tags=["auth"])
 breach_checker = BreachChecker()
 def reject_password(password, user_id=None):

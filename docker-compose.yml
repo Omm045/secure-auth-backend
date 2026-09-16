@@ -10,10 +10,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    ports:
+      - "5432:5432"
   redis:
     image: redis:7-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+    ports:
+      - "6379:6379"
   app:
     build: .
     environment:

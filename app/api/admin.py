@@ -12,7 +12,9 @@ def require_admin(user=Depends(current_user)):
 @router.get("/stats")
 def stats(user=Depends(require_admin)):
     with transaction() as c:
-        users=c.execute("SELECT COUNT(*) FROM users").fetchone()[0]; logs=c.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]; breaches=c.execute("SELECT COUNT(*) FROM audit_logs WHERE event='password_breach'").fetchone()[0]
+        users=c.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
+        logs=c.execute("SELECT COUNT(*) AS count FROM audit_logs").fetchone()["count"]
+        breaches=c.execute("SELECT COUNT(*) AS count FROM audit_logs WHERE event='password_breach'").fetchone()["count"]
     return {"users":users,"audit_events":logs,"password_breaches":breaches}
 
 @router.get("/breach-report")
