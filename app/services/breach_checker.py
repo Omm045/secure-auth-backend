@@ -4,9 +4,17 @@ class BreachChecker:
     def __init__(self,client=None,base_url=None): 
         from app.config import settings
         self.client=client or httpx.Client(timeout=5)
+        self.closed = False
         self.base_url=base_url or settings.hibp_api_url
-        if not self.base_url.startswith("https://"):
+        from urllib.parse import urlsplit
+        parsed = urlsplit(self.base_url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError("HIBP_API_URL must use HTTPS")
+    def close(self):
+        close = getattr(self.client, "close", None)
+        if close:
+            close()
+        self.closed = True
     def is_breached(self,password:str)->bool:
         digest=hashlib.sha1(password.encode()).hexdigest().upper(); prefix,suffix=digest[:5],digest[5:]
         response=self.client.get(self.base_url+prefix,headers={"Add-Padding":"true"}); response.raise_for_status()

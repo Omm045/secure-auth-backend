@@ -19,3 +19,19 @@ def test_reset_token_hook(monkeypatch):
         with transaction() as db:
             logs = [row["event"] for row in db.execute("SELECT event FROM audit_logs").fetchall()]
         assert raw not in logs
+
+def test_forgot_password_performs_dummy_verification_for_existing_and_missing(monkeypatch):
+    calls = []
+    monkeypatch.setattr(pw, "verify_password", lambda password, encoded: calls.append(encoded) or False)
+    monkeypatch.setattr(pw, "issue_reset_token", lambda *args: None)
+    with TestClient(app) as client:
+        client.post("/auth/register", json={
+            "email": "forgot-existing@example.com",
+            "password": "correct horse battery staple",
+        })
+        calls.clear()
+        existing = client.post("/password/forgot", json={"email": "forgot-existing@example.com"})
+        missing = client.post("/password/forgot", json={"email": "forgot-missing@example.com"})
+    assert existing.status_code == missing.status_code == 200
+    assert existing.json() == missing.json()
+    assert calls == [pw.DUMMY_RESET_HASH, pw.DUMMY_RESET_HASH]

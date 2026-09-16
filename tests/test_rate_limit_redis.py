@@ -18,8 +18,11 @@ class FakeRedis:
         self.values.pop(key, None)
 
 class AtomicFakeRedis(FakeRedis):
-    def eval(self, script, numkeys, key, ttl):
+    def eval(self, script, numkeys, key, *args):
         return self.incr(key)
+
+    def close(self):
+        self.closed = True
 
 
 def test_account_failures_are_shared_through_redis(monkeypatch):
@@ -50,3 +53,10 @@ def test_redis_increment_uses_atomic_script_when_available(monkeypatch):
     request = Request(scope)
     rate_limit.enforce_rate_limit(request, 2, scope="atomic")
     assert client.values
+
+def test_redis_client_can_be_closed(monkeypatch):
+    client = AtomicFakeRedis()
+    monkeypatch.setattr(rate_limit, "_redis", client)
+    rate_limit.close_redis()
+    assert client.closed is True
+    assert rate_limit._redis is None

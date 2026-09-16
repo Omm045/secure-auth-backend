@@ -66,11 +66,12 @@ class _PostgresConnection:
         self.close()
 
 
-def init_db() -> None:
+def init_db(run_migrations: bool = True) -> None:
     from alembic import command
     from alembic.config import Config
-    migration_config = Config("alembic.ini")
-    command.upgrade(migration_config, "head")
+    if run_migrations:
+        migration_config = Config("alembic.ini")
+        command.upgrade(migration_config, "head")
     with connect() as connection:
         if not settings.database_url.startswith("sqlite://"):
             connection.execute("DELETE FROM sessions WHERE revoked=TRUE OR expires_at::timestamptz<=CURRENT_TIMESTAMP")

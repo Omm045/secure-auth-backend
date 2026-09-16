@@ -72,6 +72,12 @@ def test_auth_credentials_are_not_cached():
             assert response.headers["cache-control"] == "no-store"
             assert response.headers["pragma"] == "no-cache"
 
+def test_invalid_request_id_is_replaced():
+    with TestClient(app) as client:
+        response = client.get("/health", headers={"X-Request-ID": "not-safe\n" + "x" * 1000})
+    assert len(response.headers["x-request-id"]) == 36
+    assert response.headers["x-request-id"] != "not-safe"
+
 def test_admin_responses_are_not_cached():
     with TestClient(app) as client:
         response = client.get("/admin/stats")
