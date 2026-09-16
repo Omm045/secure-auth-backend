@@ -8,10 +8,14 @@ from app.services.breach_checker import BreachChecker
 from sqlite3 import IntegrityError
 from app.services.session_service import create_session,current_user,revoke
 from app.services.audit_service import audit
-from app.security.rate_limit import enforce_rate_limit
+from app.security.rate_limit import (
+    enforce_rate_limit, enforce_account_failure_limit, record_account_failure,
+    clear_account_failures,
+)
 from app.security.csrf import verify_csrf
 from app.config import settings
 from app.security.cookies import set_session_cookie, clear_session_cookie
+from app.services.reset_service import issue_verification_token
 router=APIRouter(prefix="/auth",tags=["auth"])
 breach_checker = BreachChecker()
 def reject_password(password, user_id=None):
@@ -35,26 +39,43 @@ def register(data:Credentials,request:Request,response:Response):
         try:
             email = data.email.lower()
             role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
-            c.execute("INSERT INTO users(email,password_hash,created_at,role) VALUES(?,?,?,?)",
+            c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,0)",
                       (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
-            uid=c.execute("SELECT last_insert_rowid()").fetchone()[0]
+            uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
         except IntegrityError: raise HTTPException(409,"Email already registered")
+    issue_verification_token(uid, email)
     raw,exp=create_session(uid); set_session(response,raw,exp); audit(uid,"register",request.client.host if request.client else None)
-    return {"id":uid,"email":data.email.lower()}
+    return {"id":uid,"email":data.email.lower(),"email_verified":False}
 @router.post("/login")
 def login(data:Credentials,request:Request,response:Response):
-    enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login",identity=str(data.email))
+    enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login")
+    enforce_account_failure_limit(str(data.email), settings.rate_limit_per_minute)
     with transaction() as c: row=c.execute("SELECT * FROM users WHERE email=?",(data.email.lower(),)).fetchone()
     if not row or row["disabled"] or not verify_password(data.password,row["password_hash"]):
+        record_account_failure(str(data.email))
         if row: audit(row["id"],"login_failure",request.client.host if request.client else None)
         raise HTTPException(401,"Invalid credentials")
+    clear_account_failures(str(data.email))
     with transaction() as c: c.execute("UPDATE users SET last_login=? WHERE id=?",(datetime.now(timezone.utc).isoformat(),row["id"]))
     raw,exp=create_session(row["id"]); set_session(response,raw,exp); audit(row["id"],"login",request.client.host if request.client else None); return {"message":"Logged in"}
 @router.post("/logout")
 def logout(request:Request,response:Response):
     verify_csrf(request); revoke(request); clear_session_cookie(response); return {"message":"Logged out"}
 @router.get("/me")
-def me(user=Depends(current_user)): return {"id":user["id"],"email":user["email"]}
+def me(user=Depends(current_user)): return {"id":user["id"],"email":user["email"],"email_verified":bool(user["email_verified"])}
+
+@router.post("/verify-email")
+def verify_email(token_value: str, request: Request):
+    enforce_rate_limit(request, settings.rate_limit_per_minute, scope="verify", identity=token_value)
+    now = datetime.now(timezone.utc).isoformat()
+    with transaction() as c:
+        row = c.execute("SELECT id,user_id FROM email_verification_tokens WHERE token_hash=? AND used=0 AND expires_at>?",
+                        (token_hash(token_value), now)).fetchone()
+        if not row:
+            raise HTTPException(400, "Invalid or expired verification token")
+        c.execute("UPDATE email_verification_tokens SET used=1 WHERE id=? AND used=0", (row["id"],))
+        c.execute("UPDATE users SET email_verified=1 WHERE id=?", (row["user_id"],))
+    return {"message": "Email verified"}
 @router.post("/change-password")
 def change(data:PasswordChange,request:Request,response:Response,user=Depends(current_user)):
     verify_csrf(request); reject_password(data.new_password,user["id"])

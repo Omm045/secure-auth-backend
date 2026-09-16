@@ -1,0 +1,1 @@
+Run `alembic upgrade head` after configuring DATABASE_URL.

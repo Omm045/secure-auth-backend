@@ -4,8 +4,11 @@ from collections import defaultdict, deque
 from fastapi import HTTPException, Request
 
 from app.config import settings
+import logging
+logger = logging.getLogger("secure_auth.security")
 
 _hits: dict[str, deque[float]] = defaultdict(deque)  # compatibility/test hook
+_account_failures: dict[str, deque[float]] = defaultdict(deque)
 _redis = None
 
 
@@ -44,6 +47,7 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
             if count > limit:
                 if on_limited:
                     on_limited()
+                logger.warning("Rate limit rejected")
                 raise HTTPException(429, "Too many requests", headers={"Retry-After": "60"})
             return
         except HTTPException:
@@ -60,5 +64,27 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
     if len(queue) >= limit:
         if on_limited:
             on_limited()
+        logger.warning("Rate limit rejected")
         raise HTTPException(429, "Too many requests", headers={"Retry-After": "60"})
     queue.append(now)
+
+
+def enforce_account_failure_limit(email: str, limit: int) -> None:
+    """Check only failed-login events, avoiding account lockout by successes."""
+    key = email.strip().lower()
+    now = time.monotonic()
+    queue = _account_failures[key]
+    while queue and now - queue[0] > 60:
+        queue.popleft()
+    if len(queue) >= max(limit * 3, 30):
+        logger.warning("Account failed-attempt limit rejected")
+        raise HTTPException(429, "Too many failed attempts", headers={"Retry-After": "60"})
+
+
+def record_account_failure(email: str) -> None:
+    key = email.strip().lower()
+    _account_failures[key].append(time.monotonic())
+
+
+def clear_account_failures(email: str) -> None:
+    _account_failures.pop(email.strip().lower(), None)

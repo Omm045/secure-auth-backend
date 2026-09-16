@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 10
     redis_url: str | None = None
     reset_cooldown_seconds: int = 60
+    email_provider: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    email_from: str | None = None
+    sentry_dsn: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     @field_validator("environment", mode="before")
@@ -54,6 +61,11 @@ class Settings(BaseSettings):
                 raise ValueError("REDIS_URL is required in production")
             if not self.admin_emails:
                 raise ValueError("ADMIN_EMAILS must identify the initial role-provisioning accounts in production")
+            if self.database_url.startswith("sqlite://"):
+                raise ValueError("SQLite is supported only for development and tests")
+            if not all((self.email_provider, self.smtp_host, self.smtp_username,
+                        self.smtp_password, self.email_from)):
+                raise ValueError("SMTP email settings are required in production")
         return self
 
 

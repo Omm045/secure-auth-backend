@@ -1,9 +1,4 @@
-"""Small SQLite persistence layer.
-
-The schema is deliberately created with explicit columns and indexed lookup
-fields.  ``user_version`` provides a lightweight migration boundary until a
-full Alembic deployment is introduced.
-"""
+"""Database connections and the stable transaction interface."""
 import sqlite3
 from contextlib import contextmanager
 
@@ -15,60 +10,62 @@ def db_path() -> str:
     return url.removeprefix("sqlite:///") if url.startswith("sqlite:///") else ":memory:"
 
 
-def connect() -> sqlite3.Connection:
+def connect():
+    if settings.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+        import psycopg
+        from psycopg.rows import dict_row
+        url = settings.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+        return _PostgresConnection(psycopg.connect(url, row_factory=dict_row))
     connection = sqlite3.connect(db_path(), timeout=10, isolation_level="DEFERRED")
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
 
+class _PostgresConnection:
+    def __init__(self, connection):
+        self._connection = connection
+
+    def execute(self, query, params=()):
+        return self._connection.execute(query.replace("?", "%s"), params)
+
+    def executemany(self, query, params):
+        return self._connection.executemany(query.replace("?", "%s"), params)
+
+    def commit(self):
+        self._connection.commit()
+
+    def rollback(self):
+        self._connection.rollback()
+
+    def close(self):
+        self._connection.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+
+
 def init_db() -> None:
+    from alembic import command
+    from alembic.config import Config
+    migration_config = Config("alembic.ini")
+    command.upgrade(migration_config, "head")
     with connect() as connection:
-        connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                last_login TEXT,
-                disabled INTEGER NOT NULL DEFAULT 0 CHECK (disabled IN (0, 1)),
-                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'))
-            );
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token_hash TEXT UNIQUE NOT NULL,
-                expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
-            );
-            CREATE TABLE IF NOT EXISTS password_resets (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token_hash TEXT UNIQUE NOT NULL,
-                expires_at TEXT NOT NULL,
-                used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1)),
-                created_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                event TEXT NOT NULL,
-                ip TEXT,
-                metadata TEXT,
-                created_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_sessions_token_active
-                ON sessions(token_hash, revoked, expires_at);
-            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-            CREATE INDEX IF NOT EXISTS idx_resets_token_active
-                ON password_resets(token_hash, used, expires_at);
-            CREATE INDEX IF NOT EXISTS idx_resets_user ON password_resets(user_id);
-            CREATE INDEX IF NOT EXISTS idx_audit_event_time ON audit_logs(event, created_at);
-            PRAGMA user_version = 1;
-            """
-        )
+        if not settings.database_url.startswith("sqlite://"):
+            if settings.admin_emails:
+                connection.executemany(
+                    "UPDATE users SET role='admin' WHERE lower(email)=lower(?)",
+                    [(email,) for email in settings.admin_emails],
+                )
+            connection.commit()
+            return
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
         if "role" not in columns:
             connection.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")

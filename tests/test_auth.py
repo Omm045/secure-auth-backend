@@ -26,6 +26,16 @@ def test_disabled_login_and_last_login():
     with TestClient(app) as c:
         assert c.post('/auth/login',json={'email':'disabled@example.com','password':'abcdefgh'}).status_code == 401
 
+def test_failed_account_attempts_do_not_count_successful_login():
+    from app.security import rate_limit
+    rate_limit._hits.clear()
+    rate_limit._account_failures.clear()
+    with TestClient(app) as c:
+        assert c.post('/auth/register', json={'email': 'victim@example.com', 'password': 'abcdefgh'}).status_code == 201
+        for _ in range(5):
+            assert c.post('/auth/login', json={'email': 'victim@example.com', 'password': 'wrongpass'}).status_code == 401
+        assert c.post('/auth/login', json={'email': 'victim@example.com', 'password': 'abcdefgh'}).status_code == 200
+
 def test_rate_limit(monkeypatch):
     import app.api.auth as module
     from app.security import rate_limit
