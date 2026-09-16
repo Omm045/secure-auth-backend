@@ -8,7 +8,10 @@ from app.services.breach_checker import BreachChecker
 from sqlite3 import IntegrityError
 from app.services.session_service import create_session,current_user,revoke
 from app.services.audit_service import audit
-from app.security.rate_limit import enforce_rate_limit
+from app.security.rate_limit import (
+    enforce_rate_limit, enforce_account_failure_limit, record_account_failure,
+    clear_account_failures,
+)
 from app.security.csrf import verify_csrf
 from app.config import settings
 from app.security.cookies import set_session_cookie, clear_session_cookie
@@ -45,11 +48,14 @@ def register(data:Credentials,request:Request,response:Response):
     return {"id":uid,"email":data.email.lower(),"email_verified":False}
 @router.post("/login")
 def login(data:Credentials,request:Request,response:Response):
-    enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login",identity=str(data.email))
+    enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login")
+    enforce_account_failure_limit(str(data.email), settings.rate_limit_per_minute)
     with transaction() as c: row=c.execute("SELECT * FROM users WHERE email=?",(data.email.lower(),)).fetchone()
     if not row or row["disabled"] or not verify_password(data.password,row["password_hash"]):
+        record_account_failure(str(data.email))
         if row: audit(row["id"],"login_failure",request.client.host if request.client else None)
         raise HTTPException(401,"Invalid credentials")
+    clear_account_failures(str(data.email))
     with transaction() as c: c.execute("UPDATE users SET last_login=? WHERE id=?",(datetime.now(timezone.utc).isoformat(),row["id"]))
     raw,exp=create_session(row["id"]); set_session(response,raw,exp); audit(row["id"],"login",request.client.host if request.client else None); return {"message":"Logged in"}
 @router.post("/logout")
