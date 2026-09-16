@@ -73,9 +73,9 @@ def init_db() -> None:
     command.upgrade(migration_config, "head")
     with connect() as connection:
         if not settings.database_url.startswith("sqlite://"):
-            connection.execute("DELETE FROM sessions WHERE revoked=TRUE OR expires_at<=CURRENT_TIMESTAMP")
-            connection.execute("DELETE FROM password_resets WHERE used=TRUE OR expires_at<=CURRENT_TIMESTAMP")
-            connection.execute("DELETE FROM email_verification_tokens WHERE used=TRUE OR expires_at<=CURRENT_TIMESTAMP")
+            connection.execute("DELETE FROM sessions WHERE revoked=TRUE OR expires_at::timestamptz<=CURRENT_TIMESTAMP")
+            connection.execute("DELETE FROM password_resets WHERE used=TRUE OR expires_at::timestamptz<=CURRENT_TIMESTAMP")
+            connection.execute("DELETE FROM email_verification_tokens WHERE used=TRUE OR expires_at::timestamptz<=CURRENT_TIMESTAMP")
             connection.commit()
             return
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
