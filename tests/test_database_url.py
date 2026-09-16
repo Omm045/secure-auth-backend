@@ -44,7 +44,7 @@ def test_production_requires_postgres_database_url():
             secret_key="x" * 40,
             session_cookie_secure=True,
             cors_origins=["https://example.test"],
-            redis_url="redis://localhost",
+            redis_url="rediss://localhost",
             admin_emails=["admin@example.test"],
             email_provider="smtp",
             smtp_host="smtp.example.test",
@@ -53,3 +53,7 @@ def test_production_requires_postgres_database_url():
             email_from="no-reply@example.test",
             app_base_url="https://auth.example.test",
         )
+
+def test_environment_rejects_typos():
+    with pytest.raises(ValueError):
+        Settings(environment="productionn")

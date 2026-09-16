@@ -1,12 +1,12 @@
 """Typed, fail-closed application configuration."""
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    environment: str = "development"
+    environment: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite:///./app.db"
     secret_key: str = "development-only-change-me"
     access_token_expire_minutes: int = 30
@@ -61,6 +61,8 @@ class Settings(BaseSettings):
                 raise ValueError("production CORS origins must be explicit HTTPS origins")
             if not self.redis_url:
                 raise ValueError("REDIS_URL is required in production")
+            if not self.redis_url.startswith("rediss://"):
+                raise ValueError("REDIS_URL must use rediss:// in production")
             if not self.admin_emails:
                 raise ValueError("ADMIN_EMAILS must identify the initial role-provisioning accounts in production")
             if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):

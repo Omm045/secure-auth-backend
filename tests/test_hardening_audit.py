@@ -19,7 +19,7 @@ def test_production_requires_bootstrap_admin_and_redis():
             secret_key="x" * 40,
             session_cookie_secure=True,
             cors_origins=["https://example.test"],
-            redis_url="redis://localhost",
+            redis_url="rediss://localhost",
             admin_emails=[],
         )
 
