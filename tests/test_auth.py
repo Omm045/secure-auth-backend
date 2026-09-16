@@ -1,4 +1,5 @@
 import pytest
+import sqlite3
 from fastapi.testclient import TestClient
 from app.main import app
 import app.api.auth as auth
@@ -25,6 +26,40 @@ def test_duplicate_registration_returns_conflict():
         response = c.post('/auth/register', json=payload)
         assert response.status_code == 409
         assert response.json()["detail"] == "Email already registered"
+
+def test_registration_race_returns_conflict_on_insert_unique_violation(monkeypatch):
+    import app.api.auth as auth
+
+    class Cursor:
+        def fetchone(self):
+            return None
+
+    class RacingConnection:
+        def execute(self, query, params=()):
+            if query.startswith("SELECT 1"):
+                return Cursor()
+            raise sqlite3.IntegrityError("UNIQUE constraint failed: users.email")
+        def commit(self):
+            pass
+        def rollback(self):
+            pass
+        def close(self):
+            pass
+
+    class Transaction:
+        def __enter__(self):
+            return RacingConnection()
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(auth, "transaction", lambda: Transaction())
+    monkeypatch.setattr(auth, "reject_password", lambda password: None)
+    monkeypatch.setattr(auth, "enforce_rate_limit", lambda *args, **kwargs: None)
+    with TestClient(app) as client:
+        response = client.post("/auth/register", json={
+            "email": "racing@example.com", "password": "abcdefgh"
+        })
+    assert response.status_code == 409
 
 def test_disabled_login_and_last_login():
     with TestClient(app) as c:
