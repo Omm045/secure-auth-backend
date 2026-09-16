@@ -13,7 +13,7 @@ def upgrade():
     columns = {column["name"] for column in inspector.get_columns("users")}
     if "email_verified" not in columns:
         op.add_column("users", sa.Column("email_verified", sa.Boolean(), nullable=False,
-                                          server_default=sa.text("0")))
+                                          server_default=sa.text("FALSE")))
     if "email_verification_tokens" not in inspector.get_table_names():
         op.create_table(
             "email_verification_tokens",
@@ -21,7 +21,7 @@ def upgrade():
             sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
             sa.Column("token_hash", sa.String(), unique=True, nullable=False),
             sa.Column("expires_at", sa.String(), nullable=False),
-            sa.Column("used", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            sa.Column("used", sa.Boolean(), nullable=False, server_default=sa.text("FALSE")),
             sa.Column("created_at", sa.String(), nullable=False),
         )
         op.create_index("idx_verification_token_active", "email_verification_tokens",

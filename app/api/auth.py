@@ -41,7 +41,7 @@ def register(data:Credentials,request:Request,response:Response):
             role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
             c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,0)",
                       (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
-            uid=c.execute("SELECT last_insert_rowid()").fetchone()[0]
+            uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
         except IntegrityError: raise HTTPException(409,"Email already registered")
     issue_verification_token(uid, email)
     raw,exp=create_session(uid); set_session(response,raw,exp); audit(uid,"register",request.client.host if request.client else None)
