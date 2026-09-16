@@ -11,7 +11,10 @@ Copy `.env.example` to `.env`; SQLite is the default. Clients may query HIBP usi
 production database. SMTP settings (`EMAIL_PROVIDER`, `SMTP_HOST`,
 `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM`) are also required.
 Production rate limiting fails closed if Redis is unavailable; development/test
-uses an in-process fallback. Apply schema changes with `alembic upgrade head`.
+uses an in-process fallback. SMTP delivery is used for reset and verification
+messages. Newly registered users have reduced access until they verify their
+email; existing authentication remains available so clients can complete
+verification. Apply schema changes with `alembic upgrade head`.
 
 The `/health` endpoint is liveness; `/ready` checks database readiness. Sessions
 and reset values are opaque, hashed before persistence, and never logged.

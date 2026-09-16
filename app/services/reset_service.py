@@ -2,11 +2,43 @@ from datetime import datetime, timedelta, timezone
 from app.config import settings
 from app.database.connection import transaction
 from app.security.tokens import token, token_hash
+import smtplib
+from email.message import EmailMessage
 
 
 def deliver_reset_token(email: str, raw_token: str) -> None:
-    """Production integration point (email provider); never log or return tokens."""
-    return None
+    """Send reset mail through SMTP without logging or persisting the token."""
+    if not settings.smtp_host:
+        if settings.environment == "production":
+            raise RuntimeError("SMTP is not configured")
+        return
+    message = EmailMessage()
+    message["Subject"] = "Password reset"
+    message["From"] = settings.email_from
+    message["To"] = email
+    message.set_content("Use the password reset token in your trusted client.")
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+        server.starttls()
+        if settings.smtp_username:
+            server.login(settings.smtp_username, settings.smtp_password or "")
+        server.send_message(message)
+
+
+def deliver_verification_token(email: str, raw_token: str) -> None:
+    deliver_reset_token(email, raw_token)
+
+
+def issue_verification_token(user_id: int, email: str) -> None:
+    raw = token()
+    now = datetime.now(timezone.utc)
+    with transaction() as connection:
+        connection.execute("UPDATE email_verification_tokens SET used=1 WHERE user_id=? AND used=0", (user_id,))
+        connection.execute(
+            "INSERT INTO email_verification_tokens(id,user_id,token_hash,expires_at,used,created_at) VALUES(?,?,?,?,0,?)",
+            (token(), user_id, token_hash(raw),
+             (now + timedelta(minutes=settings.reset_token_expire_minutes)).isoformat(), now.isoformat()),
+        )
+    deliver_verification_token(email, raw)
 
 
 def issue_reset_token(user_id: int, email: str) -> None:
