@@ -1,3 +1,4 @@
+import hashlib
 from app.config import settings
 from app.security import rate_limit
 import pytest
@@ -31,5 +32,6 @@ def test_account_failures_are_shared_through_redis(monkeypatch):
     with pytest.raises(Exception) as error:
         rate_limit.enforce_account_failure_limit("shared@example.com", 10)
 
-    assert client.values["account-failures:shared@example.com"] == 30
+    key = hashlib.sha256(b"shared@example.com").hexdigest()[:32]
+    assert client.values[f"account-failures:{key}"] == 30
     assert error.value.status_code == 429

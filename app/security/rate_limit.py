@@ -5,6 +5,7 @@ from fastapi import HTTPException, Request
 
 from app.config import settings
 import logging
+import hashlib
 logger = logging.getLogger("secure_auth.security")
 
 _hits: dict[str, deque[float]] = defaultdict(deque)  # compatibility/test hook
@@ -33,7 +34,8 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
                        identity: str | None = None):
     dimensions = [f"ip:{request.client.host if request.client else 'unknown'}"]
     if identity:
-        dimensions.append(f"account:{identity.strip().lower()}")
+        identity_digest = hashlib.sha256(identity.strip().lower().encode()).hexdigest()[:32]
+        dimensions.append(f"account:{identity_digest}")
     key = f"{scope}:" + "|".join(dimensions)
     try:
         client = _redis_client()
@@ -71,7 +73,7 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
 
 def enforce_account_failure_limit(email: str, limit: int) -> None:
     """Check only failed-login events, avoiding account lockout by successes."""
-    key = email.strip().lower()
+    key = hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
     redis_key = f"account-failures:{key}"
     threshold = max(limit * 3, 30)
     client = _redis_client()
@@ -99,7 +101,7 @@ def enforce_account_failure_limit(email: str, limit: int) -> None:
 
 
 def record_account_failure(email: str) -> None:
-    key = email.strip().lower()
+    key = hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
     client = _redis_client()
     if client is not None:
         try:
@@ -117,7 +119,7 @@ def record_account_failure(email: str) -> None:
 
 
 def clear_account_failures(email: str) -> None:
-    key = email.strip().lower()
+    key = hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
     client = _redis_client()
     if client is not None:
         try:

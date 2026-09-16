@@ -2,7 +2,7 @@
 
 | Requirement | Implementation |
 |---|---|
-| Minimum length | 8 characters (`password_policy.py`) |
+| Minimum length | 15 characters for single-factor passwords (`password_policy.py`) |
 | Composition rules | None; arbitrary printable passwords are accepted |
 | Compromised-password screening | HIBP k-anonymity plus local compromised list |
 | Forced rotation | None; reset/change is user initiated |

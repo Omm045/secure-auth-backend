@@ -42,7 +42,7 @@ def register(data:Credentials,request:Request,response:Response):
             email = data.email.lower()
             if c.execute("SELECT 1 FROM users WHERE lower(email)=lower(?)", (email,)).fetchone():
                 raise HTTPException(409, "Email already registered")
-            role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
+            role = "user"
             c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,FALSE)",
                       (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
             uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
@@ -71,7 +71,10 @@ def me(user=Depends(current_user)): return {"id":user["id"],"email":user["email"
 
 @router.post("/verify-email")
 def verify_email(token_value: str, request: Request):
-    enforce_rate_limit(request, settings.rate_limit_per_minute, scope="verify", identity=token_value)
+    enforce_rate_limit(
+        request, settings.rate_limit_per_minute, scope="verify",
+        identity=token_hash(token_value),
+    )
     now = datetime.now(timezone.utc).isoformat()
     with transaction() as c:
         row = c.execute("SELECT id,user_id FROM email_verification_tokens WHERE token_hash=? AND used=FALSE AND expires_at>?",

@@ -45,7 +45,7 @@ async def security_headers(request:Request,call_next):
     response.headers["X-Request-ID"] = correlation_id
     if response.status_code >= 500:
         logger.error("5xx response", extra={"request_id": correlation_id})
-    response.headers.update({"X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","Referrer-Policy":"no-referrer","Content-Security-Policy":"default-src 'none'","Permissions-Policy":"geolocation=(), microphone=(), camera=()"})
+    response.headers.update({"X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","Referrer-Policy":"no-referrer","Content-Security-Policy":"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'","Permissions-Policy":"geolocation=(), microphone=(), camera=()"})
     if settings.environment == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response

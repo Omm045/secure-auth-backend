@@ -7,6 +7,15 @@ class BreachChecker:
     def is_breached(self,password:str)->bool:
         digest=hashlib.sha1(password.encode()).hexdigest().upper(); prefix,suffix=digest[:5],digest[5:]
         response=self.client.get(self.base_url+prefix,headers={"Add-Padding":"true"}); response.raise_for_status()
-        return any(line.split(":",1)[0].strip().upper()==suffix for line in response.text.splitlines() if ":" in line)
+        for line in response.text.splitlines():
+            if ":" not in line:
+                continue
+            candidate, count = line.split(":", 1)
+            try:
+                if candidate.strip().upper() == suffix and int(count.strip()) > 0:
+                    return True
+            except ValueError:
+                continue
+        return False
 
 HIBPChecker = BreachChecker

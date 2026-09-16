@@ -1,6 +1,6 @@
 # Secure FastAPI Authentication Backend
 
-Features include Argon2id password hashing, an 8–128 character policy with local common-password blocking, HIBP k-anonymity breach checking, secure HttpOnly sessions, CSRF protection, rate limiting, password reset/change flows, audit logs, admin statistics, security headers, and explicit CORS.
+Features include Argon2id password hashing, a 15–128 character single-factor password policy with local common-password blocking, HIBP k-anonymity breach checking, secure HttpOnly sessions, CSRF protection, rate limiting, password reset/change flows, audit logs, admin statistics, security headers, and explicit CORS.
 
 ## Run
 `python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
@@ -30,8 +30,14 @@ unused SQLAlchemy model files were removed rather than maintaining mappings
 that were not used by the query layer.
 The application serves the bundled frontend under `/app`. Reset and
 verification emails use `FRONTEND_BASE_URL` when set, otherwise
-`APP_BASE_URL`, and link to `/reset.html` and `/verify.html`; production
-deployments must set the effective frontend URL to HTTPS.
+`APP_BASE_URL`, and link to `/reset.html` and `/verify.html` using URL
+fragments so tokens are not sent in HTTP request URLs. The frontend immediately
+removes the fragment and submits the token in a POST body. Production
+deployments must set the effective frontend URL to HTTPS. Public registration
+always creates a normal, unverified user; administrator provisioning is an
+explicit trusted bootstrap action (`python -m scripts.provision_admin
+admin@example.com`) and admin routes require verification. `ADMIN_EMAILS` is
+not a role-granting mechanism.
 
 ## Test
 `python -m pytest -q`
