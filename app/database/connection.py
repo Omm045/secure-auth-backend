@@ -30,7 +30,8 @@ class _PostgresConnection:
         return self._connection.execute(query.replace("?", "%s"), params)
 
     def executemany(self, query, params):
-        return self._connection.executemany(query.replace("?", "%s"), params)
+        with self._connection.cursor() as cursor:
+            return cursor.executemany(query.replace("?", "%s"), params)
 
     def commit(self):
         self._connection.commit()

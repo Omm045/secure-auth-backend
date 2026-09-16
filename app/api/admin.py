@@ -12,7 +12,9 @@ def require_admin(user=Depends(current_user)):
 @router.get("/stats")
 def stats(user=Depends(require_admin)):
     with transaction() as c:
-        users=c.execute("SELECT COUNT(*) FROM users").fetchone()[0]; logs=c.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]; breaches=c.execute("SELECT COUNT(*) FROM audit_logs WHERE event='password_breach'").fetchone()[0]
+        users=c.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
+        logs=c.execute("SELECT COUNT(*) AS count FROM audit_logs").fetchone()["count"]
+        breaches=c.execute("SELECT COUNT(*) AS count FROM audit_logs WHERE event='password_breach'").fetchone()["count"]
     return {"users":users,"audit_events":logs,"password_breaches":breaches}
 
 @router.get("/breach-report")
@@ -20,7 +22,7 @@ def breach_report(request: Request, user=Depends(require_admin)):
     enforce_rate_limit(request, 2, scope="breach-report")
     checker = BreachChecker()
     accounts = []
-    sample_path = Path(__file__).parents[2] / "tests" / "fixtures" / "sample_accounts.csv"
+    sample_path = Path(__file__).parents[1] / "data" / "sample_accounts.csv"
     for account in csv.DictReader(sample_path.open(newline="", encoding="utf-8")):
         accounts.append({"email": account["email"], "breached": checker.is_breached(account["password"])})
     breached = sum(item["breached"] for item in accounts)

@@ -36,13 +36,13 @@ def reset(data:Reset,request:Request):
         raise HTTPException(422,detail=errors or ["Password has appeared in a breach"])
     race = False
     with transaction() as c:
-        c.execute("DELETE FROM password_resets WHERE used=1 OR expires_at<=?", (datetime.now(timezone.utc).isoformat(),))
-        row=c.execute("SELECT id,user_id FROM password_resets WHERE token_hash=? AND used=0 AND expires_at>?",(token_hash(data.token),datetime.now(timezone.utc).isoformat())).fetchone()
+        c.execute("DELETE FROM password_resets WHERE used=TRUE OR expires_at<=?", (datetime.now(timezone.utc).isoformat(),))
+        row=c.execute("SELECT id,user_id FROM password_resets WHERE token_hash=? AND used=FALSE AND expires_at>?",(token_hash(data.token),datetime.now(timezone.utc).isoformat())).fetchone()
         if not row:
             audit(None,"reset_failure",request.client.host if request.client else None)
             raise HTTPException(400,"Invalid or expired reset token")
         # Conditional consumption prevents two concurrent requests from using one token.
-        consumed = c.execute("UPDATE password_resets SET used=1 WHERE id=? AND used=0 AND expires_at>?",
+        consumed = c.execute("UPDATE password_resets SET used=TRUE WHERE id=? AND used=FALSE AND expires_at>?",
                              (row["id"], datetime.now(timezone.utc).isoformat()))
         if consumed.rowcount != 1:
             race = True
@@ -50,8 +50,8 @@ def reset(data:Reset,request:Request):
             pass
         else:
             c.execute("UPDATE users SET password_hash=? WHERE id=?",(hash_password(data.new_password),row["user_id"]))
-            c.execute("UPDATE password_resets SET used=1 WHERE user_id=?", (row["user_id"],))
-            c.execute("UPDATE sessions SET revoked=1 WHERE user_id=?",(row["user_id"],))
+            c.execute("UPDATE password_resets SET used=TRUE WHERE user_id=?", (row["user_id"],))
+            c.execute("UPDATE sessions SET revoked=TRUE WHERE user_id=?",(row["user_id"],))
     if race:
         audit(None,"reset_failure",request.client.host if request.client else None, {"reason": "token_race"})
         raise HTTPException(400, "Invalid or expired reset token")

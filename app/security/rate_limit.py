@@ -72,19 +72,60 @@ def enforce_rate_limit(request: Request, limit: int, on_limited=None, scope: str
 def enforce_account_failure_limit(email: str, limit: int) -> None:
     """Check only failed-login events, avoiding account lockout by successes."""
     key = email.strip().lower()
+    redis_key = f"account-failures:{key}"
+    threshold = max(limit * 3, 30)
+    client = _redis_client()
+    if client is not None:
+        try:
+            count = int(client.get(redis_key) or 0)
+            if count >= threshold:
+                logger.warning("Account failed-attempt limit rejected")
+                raise HTTPException(429, "Too many failed attempts", headers={"Retry-After": "60"})
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            if settings.environment == "production":
+                raise HTTPException(503, "Rate limiting unavailable")
+    if settings.environment == "production":
+        raise HTTPException(503, "Rate limiting unavailable")
     now = time.monotonic()
     queue = _account_failures[key]
     while queue and now - queue[0] > 60:
         queue.popleft()
-    if len(queue) >= max(limit * 3, 30):
+    if len(queue) >= threshold:
         logger.warning("Account failed-attempt limit rejected")
         raise HTTPException(429, "Too many failed attempts", headers={"Retry-After": "60"})
 
 
 def record_account_failure(email: str) -> None:
     key = email.strip().lower()
+    client = _redis_client()
+    if client is not None:
+        try:
+            redis_key = f"account-failures:{key}"
+            count = client.incr(redis_key)
+            if count == 1:
+                client.expire(redis_key, 60)
+            return
+        except Exception:
+            if settings.environment == "production":
+                raise HTTPException(503, "Rate limiting unavailable")
+    if settings.environment == "production":
+        raise HTTPException(503, "Rate limiting unavailable")
     _account_failures[key].append(time.monotonic())
 
 
 def clear_account_failures(email: str) -> None:
-    _account_failures.pop(email.strip().lower(), None)
+    key = email.strip().lower()
+    client = _redis_client()
+    if client is not None:
+        try:
+            client.delete(f"account-failures:{key}")
+            return
+        except Exception:
+            if settings.environment == "production":
+                raise HTTPException(503, "Rate limiting unavailable")
+    if settings.environment == "production":
+        raise HTTPException(503, "Rate limiting unavailable")
+    _account_failures.pop(key, None)

@@ -17,5 +17,5 @@ def test_reset_token_hook(monkeypatch):
         r=c.post('/password/reset',headers={'X-CSRF-Token':csrf},json={'token':raw,'new_password':'newpass1'})
         assert r.status_code==200
         with transaction() as db:
-            logs = [row[0] for row in db.execute("SELECT event FROM audit_logs").fetchall()]
+            logs = [row["event"] for row in db.execute("SELECT event FROM audit_logs").fetchall()]
         assert raw not in logs

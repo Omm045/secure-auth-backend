@@ -27,12 +27,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose up -d --build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: docker compose up -d postgres redis
       - run: |
           for i in $(seq 1 30); do
-            curl --fail http://localhost:8000/health && exit 0
+            docker compose exec -T postgres pg_isready -U auth -d auth && \
+              docker compose exec -T redis redis-cli ping && exit 0
             sleep 2
           done
           docker compose logs
           exit 1
+      - env:
+          DATABASE_URL: postgresql+psycopg://auth:auth@localhost:5432/auth
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: compose-test-secret
+        run: python -m pytest -q
       - run: docker compose down -v
