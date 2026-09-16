@@ -6,11 +6,12 @@ Features include Argon2id password hashing, an 8–128 character policy with loc
 `python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
 `uvicorn app.main:app --reload`
 
-Copy `.env.example` to `.env`; SQLite is the default. Clients may query HIBP using only the first five SHA-1 characters; the backend checker does the same and never sends a password. Production deployments must set a random `SECRET_KEY`, `ENVIRONMENT=production`,
+Copy `.env.example` to `.env`; SQLite is the default. Clients may query HIBP using only the first five SHA-1 characters; the backend checker does the same and never sends a password. Production deployments must use PostgreSQL (SQLite is development/test only) and set a random `SECRET_KEY`, `ENVIRONMENT=production`,
 `SESSION_COOKIE_SECURE=true`, restrictive HTTPS CORS, `REDIS_URL`, and a
-production database. Production rate limiting fails closed if Redis is
-unavailable; development/test uses an in-process fallback. Reset delivery is an
-adapter (`deliver_reset_token`) and must be connected to a real provider.
+production database. SMTP settings (`EMAIL_PROVIDER`, `SMTP_HOST`,
+`SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM`) are also required.
+Production rate limiting fails closed if Redis is unavailable; development/test
+uses an in-process fallback. Apply schema changes with `alembic upgrade head`.
 
 The `/health` endpoint is liveness; `/ready` checks database readiness. Sessions
 and reset values are opaque, hashed before persistence, and never logged.

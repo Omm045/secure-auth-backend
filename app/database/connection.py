@@ -1,9 +1,4 @@
-"""Small SQLite persistence layer.
-
-The schema is deliberately created with explicit columns and indexed lookup
-fields.  ``user_version`` provides a lightweight migration boundary until a
-full Alembic deployment is introduced.
-"""
+"""Database connections and the stable transaction interface."""
 import sqlite3
 from contextlib import contextmanager
 
@@ -23,52 +18,11 @@ def connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
+    from alembic import command
+    from alembic.config import Config
+    migration_config = Config("alembic.ini")
+    command.upgrade(migration_config, "head")
     with connect() as connection:
-        connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                last_login TEXT,
-                disabled INTEGER NOT NULL DEFAULT 0 CHECK (disabled IN (0, 1)),
-                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'))
-            );
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token_hash TEXT UNIQUE NOT NULL,
-                expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
-            );
-            CREATE TABLE IF NOT EXISTS password_resets (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token_hash TEXT UNIQUE NOT NULL,
-                expires_at TEXT NOT NULL,
-                used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1)),
-                created_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                event TEXT NOT NULL,
-                ip TEXT,
-                metadata TEXT,
-                created_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_sessions_token_active
-                ON sessions(token_hash, revoked, expires_at);
-            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-            CREATE INDEX IF NOT EXISTS idx_resets_token_active
-                ON password_resets(token_hash, used, expires_at);
-            CREATE INDEX IF NOT EXISTS idx_resets_user ON password_resets(user_id);
-            CREATE INDEX IF NOT EXISTS idx_audit_event_time ON audit_logs(event, created_at);
-            PRAGMA user_version = 1;
-            """
-        )
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
         if "role" not in columns:
             connection.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
