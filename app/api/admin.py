@@ -20,7 +20,7 @@ def breach_report(request: Request, user=Depends(require_admin)):
     enforce_rate_limit(request, 2, scope="breach-report")
     checker = BreachChecker()
     accounts = []
-    sample_path = Path(__file__).parents[2] / "tests" / "fixtures" / "sample_accounts.csv"
+    sample_path = Path(__file__).parents[1] / "data" / "sample_accounts.csv"
     for account in csv.DictReader(sample_path.open(newline="", encoding="utf-8")):
         accounts.append({"email": account["email"], "breached": checker.is_breached(account["password"])})
     breached = sum(item["breached"] for item in accounts)

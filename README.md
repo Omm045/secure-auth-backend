@@ -19,7 +19,7 @@ verification. Apply schema changes with `alembic upgrade head`.
 The `/health` endpoint is liveness; `/ready` checks database readiness. Sessions
 and reset values are opaque, hashed before persistence, and never logged.
 The admin-only `/admin/breach-report` endpoint evaluates only the clearly fake
-accounts in `tests/fixtures/sample_accounts.csv`; it returns addresses and
+accounts in `app/data/sample_accounts.csv`; it returns addresses and
 breached/not-breached flags, never passwords. A minimal advisory zxcvbn meter
 is provided in `frontend/index.html`; server-side policy and breach checks
 remain authoritative.
