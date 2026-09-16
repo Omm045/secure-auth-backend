@@ -43,7 +43,7 @@ async def security_headers(request:Request,call_next):
         logger.exception("Unhandled application exception", extra={"request_id": correlation_id})
         response = JSONResponse({"detail": "Internal server error"}, status_code=500)
     response.headers["X-Request-ID"] = correlation_id
-    if request.url.path == "/csrf" or request.url.path.startswith(("/auth/", "/password/")):
+    if request.url.path == "/csrf" or request.url.path.startswith(("/auth/", "/password/", "/admin/")):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
     if response.status_code >= 500:

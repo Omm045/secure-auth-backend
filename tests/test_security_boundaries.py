@@ -72,6 +72,12 @@ def test_auth_credentials_are_not_cached():
             assert response.headers["cache-control"] == "no-store"
             assert response.headers["pragma"] == "no-cache"
 
+def test_admin_responses_are_not_cached():
+    with TestClient(app) as client:
+        response = client.get("/admin/stats")
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+
 def test_development_cookie_names_remain_http_compatible():
     with TestClient(app) as client:
         response = client.get("/csrf")
