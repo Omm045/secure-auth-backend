@@ -26,13 +26,15 @@ def _deliver(email: str, subject: str, body: str) -> None:
 
 def deliver_reset_token(email: str, raw_token: str) -> None:
     """Send a usable reset link without logging or persisting the token."""
-    link = f"{settings.app_base_url.rstrip('/')}/password/reset?token={quote(raw_token)}"
+    frontend_url = (settings.frontend_base_url or settings.app_base_url).rstrip("/")
+    link = f"{frontend_url}/reset.html?token={quote(raw_token)}"
     _deliver(email, "Password reset", f"Reset your password using this link:\n{link}")
 
 
 def deliver_verification_token(email: str, raw_token: str) -> None:
     """Send a usable verification link without logging or persisting the token."""
-    link = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token_value={quote(raw_token)}"
+    frontend_url = (settings.frontend_base_url or settings.app_base_url).rstrip("/")
+    link = f"{frontend_url}/verify.html?token={quote(raw_token)}"
     _deliver(email, "Verify your email", f"Verify your email using this link:\n{link}")
 
 

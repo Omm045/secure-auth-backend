@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Reset password</title>
+<form id="reset"><h1>Reset password</h1><input id="token" name="token" type="hidden"><input name="new_password" type="password" minlength="8" required placeholder="New password"><button>Reset password</button></form>
+<script>
+const token=document.querySelector('#token');
+token.value=new URLSearchParams(window.location.search).get('token')||'';
+async function csrf(){const response=await fetch('/csrf'); return (await response.json()).csrf_token}
+reset.onsubmit=async event=>{event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); const response=await fetch('/password/reset',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':await csrf()},body:JSON.stringify(data)}); alert((await response.json()).message||'Request completed')};
+</script>

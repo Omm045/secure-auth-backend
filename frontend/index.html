@@ -6,9 +6,10 @@
 <style>body{font:16px system-ui;max-width:32rem;margin:3rem auto}form{display:grid;gap:.6rem;margin:2rem 0}meter{width:100%}</style>
 <h1>Secure account</h1>
 <form id="signup"><h2>Sign up</h2><input name="email" type="email" required placeholder="Email"><input id="signup-password" name="password" type="password" minlength="8" required placeholder="Password"><meter id="strength" min="0" max="4" value="0"></meter><button>Sign up</button></form>
-<form id="reset"><h2>Reset password</h2><input name="token" required placeholder="Reset token"><input id="reset-password" name="new_password" type="password" minlength="8" required placeholder="New password"><button>Reset password</button></form>
+<form id="reset"><h2>Reset password</h2><input id="reset-token" name="token" type="hidden"><input id="reset-password" name="new_password" type="password" minlength="8" required placeholder="New password"><button>Reset password</button></form>
 <script>
 const passwordInputs=[document.querySelector('#signup-password'),document.querySelector('#reset-password')];
+document.querySelector('#reset-token').value=new URLSearchParams(window.location.search).get('token')||'';
 passwordInputs.forEach(input=>input.addEventListener('input',()=>{if(input===passwordInputs[0]) document.querySelector('#strength').value=zxcvbn(input.value).score}));
 async function csrf(){const r=await fetch('/csrf'); if(!r.ok) throw new Error('Unable to initialize CSRF protection'); return (await r.json()).csrf_token}
 async function submit(form,url){const data=Object.fromEntries(new FormData(form)); const headers={'Content-Type':'application/json'}; if(url==='/password/reset') headers['X-CSRF-Token']=await csrf(); const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(data)}); alert((await r.json()).message||'Request completed');}

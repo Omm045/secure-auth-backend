@@ -28,6 +28,10 @@ PostgreSQL/Redis services.
 Alembic migrations are the single schema source of truth; the previously
 unused SQLAlchemy model files were removed rather than maintaining mappings
 that were not used by the query layer.
+The application serves the bundled frontend under `/app`. Reset and
+verification emails use `FRONTEND_BASE_URL` when set, otherwise
+`APP_BASE_URL`, and link to `/reset.html` and `/verify.html`; production
+deployments must set the effective frontend URL to HTTPS.
 
 ## Test
 `python -m pytest -q`

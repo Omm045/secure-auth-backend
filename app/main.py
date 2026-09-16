@@ -1,6 +1,7 @@
 from fastapi import FastAPI,Request,Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database.connection import init_db
 from app.api.auth import router as auth_router
@@ -11,6 +12,7 @@ from app.security.cookies import set_csrf_cookie
 from app.logging_config import configure_logging, request_id
 import logging
 app=FastAPI(title="Secure Auth API",version="1.0.0")
+app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
 configure_logging()
 logger = logging.getLogger("secure_auth")
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origins,allow_credentials=True,allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],allow_headers=["Authorization","Content-Type","X-CSRF-Token"])
