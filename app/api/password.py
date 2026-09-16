@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter,Request,Response,HTTPException
+from fastapi import APIRouter,Request,Response,HTTPException,BackgroundTasks
 from pydantic import BaseModel,EmailStr
 from app.database.connection import transaction
 from app.security.tokens import token_hash
-from app.security.hashing import hash_password
+from app.security.hashing import hash_password, verify_password
 from app.services.password_policy import validate_password,is_password_compromised
 from app.services.breach_checker import BreachChecker
 from app.security.rate_limit import enforce_rate_limit
@@ -15,12 +15,15 @@ router=APIRouter(prefix="/password",tags=["password"])
 breach_checker=BreachChecker()
 class Email(BaseModel): email:EmailStr
 class Reset(BaseModel): token:str; new_password:str
+DUMMY_RESET_HASH = "$argon2id$v=19$m=65536,t=3,p=4$u7Pu1zpy3Um6fOGyEpJIfA$HYGl3GFHFglhpCKLF2UHfunnxAzAzyCa8tBXLHS49sA"
 @router.post("/forgot")
-def forgot(data:Email,request:Request):
+def forgot(data:Email,request:Request,background_tasks: BackgroundTasks):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="forgot",identity=str(data.email))
     with transaction() as c: row=c.execute("SELECT id FROM users WHERE email=?",(data.email.lower(),)).fetchone()
     if row:
-        issue_reset_token(row["id"], data.email.lower())
+        background_tasks.add_task(issue_reset_token, row["id"], data.email.lower())
+    else:
+        verify_password("timing-only-password", DUMMY_RESET_HASH)
     return {"message":"If the account exists, reset instructions were sent"}
 @router.post("/reset")
 def reset(data:Reset,request:Request):

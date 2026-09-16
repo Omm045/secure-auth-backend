@@ -12,6 +12,7 @@ def test_admin_stats(monkeypatch):
     monkeypatch.setattr(auth, "breach_checker", NoBreach())
     with TestClient(app) as client:
         client.post("/auth/register", json={"email": "admin@example.com", "password": "correct horse battery staple"})
+        client.post("/auth/login", json={"email": "admin@example.com", "password": "correct horse battery staple"})
         with transaction() as db:
             db.execute("UPDATE users SET role='admin', email_verified=TRUE WHERE email=?", ("admin@example.com",))
         response = client.get("/admin/stats")

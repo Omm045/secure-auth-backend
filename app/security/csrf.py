@@ -12,7 +12,8 @@ def csrf_token():
     return f"{nonce}.{signature}"
 
 def verify_csrf(request:Request):
-    cookie=request.cookies.get("csrf_token"); header=request.headers.get("X-CSRF-Token")
+    cookie_name = "__Host-csrf_token" if settings.environment == "production" else "csrf_token"
+    cookie=request.cookies.get(cookie_name); header=request.headers.get("X-CSRF-Token")
     valid = False
     if cookie and header and secrets.compare_digest(cookie,header):
         nonce, separator, signature = cookie.rpartition(".")

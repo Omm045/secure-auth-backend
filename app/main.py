@@ -43,6 +43,9 @@ async def security_headers(request:Request,call_next):
         logger.exception("Unhandled application exception", extra={"request_id": correlation_id})
         response = JSONResponse({"detail": "Internal server error"}, status_code=500)
     response.headers["X-Request-ID"] = correlation_id
+    if request.url.path == "/csrf" or request.url.path.startswith(("/auth/", "/password/")):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
     if response.status_code >= 500:
         logger.error("5xx response", extra={"request_id": correlation_id})
     response.headers.update({"X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","Referrer-Policy":"no-referrer","Content-Security-Policy":"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'","Permissions-Policy":"geolocation=(), microphone=(), camera=()"})

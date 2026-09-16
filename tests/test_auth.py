@@ -15,8 +15,7 @@ def clean(monkeypatch):
 def test_register_login_logout_and_bearer():
     with TestClient(app) as c:
         csrf=c.get('/csrf').json()['csrf_token']; r=c.post('/auth/register',json={'email':'x@example.com','password':'correct horse battery staple'}); assert r.status_code==201
-        assert c.get('/auth/me').status_code==200
-        token=r.cookies['session']; c.post('/auth/logout',headers={'X-CSRF-Token':csrf,'Authorization':'Bearer '+token}); assert c.get('/auth/me').status_code==401
+        assert c.get('/auth/me').status_code==401
         assert c.post('/auth/login',json={'email':'x@example.com','password':'correct horse battery staple'}).status_code==200
 
 def test_duplicate_registration_returns_conflict():
@@ -24,8 +23,8 @@ def test_duplicate_registration_returns_conflict():
         payload = {'email': 'duplicate@example.com', 'password': 'correct horse battery staple'}
         assert c.post('/auth/register', json=payload).status_code == 201
         response = c.post('/auth/register', json=payload)
-        assert response.status_code == 409
-        assert response.json()["detail"] == "Email already registered"
+        assert response.status_code == 201
+        assert response.json() == {"message": "If registration is available, verification instructions will be sent"}
 
 def test_registration_race_returns_conflict_on_insert_unique_violation(monkeypatch):
     import app.api.auth as auth
@@ -59,7 +58,7 @@ def test_registration_race_returns_conflict_on_insert_unique_violation(monkeypat
         response = client.post("/auth/register", json={
             "email": "racing@example.com", "password": "correct horse battery staple"
         })
-    assert response.status_code == 409
+    assert response.status_code == 201
 
 def test_disabled_login_and_last_login():
     with TestClient(app) as c:
@@ -68,6 +67,19 @@ def test_disabled_login_and_last_login():
         db.execute("UPDATE users SET disabled=TRUE WHERE email='disabled@example.com'")
     with TestClient(app) as c:
         assert c.post('/auth/login',json={'email':'disabled@example.com','password':'correct horse battery staple'}).status_code == 401
+
+def test_existing_and_missing_invalid_login_both_verify_password(monkeypatch):
+    calls = []
+    monkeypatch.setattr(auth, "verify_password", lambda password, encoded: calls.append(encoded) or False)
+    with TestClient(app) as c:
+        c.post('/auth/register', json={'email':'exists@example.com','password':'correct horse battery staple'})
+        calls.clear()
+        assert c.post('/auth/login', json={'email':'exists@example.com','password':'wrong'}).status_code == 401
+        existing_calls = len(calls)
+        calls.clear()
+        assert c.post('/auth/login', json={'email':'missing@example.com','password':'wrong'}).status_code == 401
+        assert existing_calls == 1 and len(calls) == 1
+        assert calls[0] == auth.DUMMY_PASSWORD_HASH
 
 def test_failed_account_attempts_do_not_count_successful_login():
     from app.security import rate_limit

@@ -1,6 +1,6 @@
 from datetime import datetime,timedelta,timezone
 import sqlite3
-from fastapi import APIRouter,Request,Response,HTTPException,Depends
+from fastapi import APIRouter,Request,Response,HTTPException,Depends,BackgroundTasks
 from pydantic import BaseModel,EmailStr
 from app.database.connection import transaction
 from app.security.hashing import hash_password,verify_password
@@ -20,6 +20,7 @@ from app.security.tokens import token_hash
 from psycopg.errors import UniqueViolation
 router=APIRouter(prefix="/auth",tags=["auth"])
 breach_checker = BreachChecker()
+DUMMY_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$u7Pu1zpy3Um6fOGyEpJIfA$HYGl3GFHFglhpCKLF2UHfunnxAzAzyCa8tBXLHS49sA"
 def reject_password(password, user_id=None):
     errors=validate_password(password)
     if errors: raise HTTPException(422,detail=errors)
@@ -35,28 +36,30 @@ class PasswordChange(BaseModel): current_password:str; new_password:str
 
 def set_session(response,raw,exp): set_session_cookie(response, raw, exp)
 @router.post("/register",status_code=201)
-def register(data:Credentials,request:Request,response:Response):
+def register(data:Credentials,request:Request,response:Response,background_tasks: BackgroundTasks):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="register",identity=str(data.email)); reject_password(data.password)
     try:
         with transaction() as c:
             email = data.email.lower()
             if c.execute("SELECT 1 FROM users WHERE lower(email)=lower(?)", (email,)).fetchone():
-                raise HTTPException(409, "Email already registered")
+                return {"message": "If registration is available, verification instructions will be sent"}
             role = "user"
             c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,FALSE)",
                       (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
             uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
-    except (sqlite3.IntegrityError, UniqueViolation) as exc:
-        raise HTTPException(409, "Email already registered") from exc
-    issue_verification_token(uid, email)
-    raw,exp=create_session(uid); set_session(response,raw,exp); audit(uid,"register",request.client.host if request.client else None)
-    return {"id":uid,"email":data.email.lower(),"email_verified":False}
+    except (sqlite3.IntegrityError, UniqueViolation):
+        return {"message": "If registration is available, verification instructions will be sent"}
+    background_tasks.add_task(issue_verification_token, uid, email)
+    audit(uid,"register",request.client.host if request.client else None)
+    return {"message": "If registration is available, verification instructions will be sent"}
 @router.post("/login")
 def login(data:Credentials,request:Request,response:Response):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="login",identity=str(data.email))
     enforce_account_failure_limit(str(data.email), settings.rate_limit_per_minute)
     with transaction() as c: row=c.execute("SELECT * FROM users WHERE email=?",(data.email.lower(),)).fetchone()
-    if not row or row["disabled"] or not verify_password(data.password,row["password_hash"]):
+    password_hash = row["password_hash"] if row else DUMMY_PASSWORD_HASH
+    password_valid = verify_password(data.password, password_hash)
+    if not row or row["disabled"] or not password_valid:
         record_account_failure(str(data.email))
         if row: audit(row["id"],"login_failure",request.client.host if request.client else None)
         raise HTTPException(401,"Invalid credentials")
@@ -69,8 +72,12 @@ def logout(request:Request,response:Response):
 @router.get("/me")
 def me(user=Depends(current_user)): return {"id":user["id"],"email":user["email"],"email_verified":bool(user["email_verified"])}
 
+class VerificationRequest(BaseModel):
+    token_value: str
+
 @router.post("/verify-email")
-def verify_email(token_value: str, request: Request):
+def verify_email(data: VerificationRequest, request: Request):
+    token_value = data.token_value
     enforce_rate_limit(
         request, settings.rate_limit_per_minute, scope="verify",
         identity=token_hash(token_value),
