@@ -32,7 +32,7 @@ def test_admin_uses_role_not_email(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/auth/register",
-            json={"email": "role-test@example.com", "password": "abcdefgh"},
+            json={"email": "role-test@example.com", "password": "correct horse battery staple"},
         )
         assert response.status_code == 201
         with transaction() as connection:
@@ -42,14 +42,27 @@ def test_admin_uses_role_not_email(monkeypatch):
             )
         assert client.get("/admin/stats").status_code == 403
 
+def test_unverified_admin_cannot_access_admin(monkeypatch):
+    import app.api.auth as auth
+    monkeypatch.setattr(auth, "breach_checker", NoBreach())
+    with TestClient(app) as client:
+        client.post("/auth/register", json={
+            "email": "unverified-admin@example.com",
+            "password": "correct horse battery staple",
+        })
+        with transaction() as db:
+            db.execute("UPDATE users SET role='admin', email_verified=FALSE WHERE email=?",
+                       ("unverified-admin@example.com",))
+        assert client.get("/admin/stats").status_code == 403
+
 
 def test_rate_limit_includes_retry_after(monkeypatch):
     _hits.clear()
     monkeypatch.setattr(settings, "rate_limit_per_minute", 1)
     with TestClient(app) as client:
-        client.post("/auth/login", json={"email": "limited@example.com", "password": "abcdefgh"})
+        client.post("/auth/login", json={"email": "limited@example.com", "password": "correct horse battery staple"})
         response = client.post(
-            "/auth/login", json={"email": "limited@example.com", "password": "abcdefgh"}
+            "/auth/login", json={"email": "limited@example.com", "password": "correct horse battery staple"}
         )
         assert response.status_code == 429
         assert response.headers["retry-after"] == "60"

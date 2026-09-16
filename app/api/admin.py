@@ -7,7 +7,8 @@ from app.services.breach_checker import BreachChecker
 from app.security.rate_limit import enforce_rate_limit
 router=APIRouter(prefix="/admin",tags=["admin"])
 def require_admin(user=Depends(current_user)):
-    if user["role"] != "admin": raise HTTPException(403,"Admin access required")
+    if not user["email_verified"] or user["role"] != "admin":
+        raise HTTPException(403,"Verified admin access required")
     return user
 @router.get("/stats")
 def stats(user=Depends(require_admin)):

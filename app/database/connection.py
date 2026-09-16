@@ -73,11 +73,9 @@ def init_db() -> None:
     command.upgrade(migration_config, "head")
     with connect() as connection:
         if not settings.database_url.startswith("sqlite://"):
-            if settings.admin_emails:
-                connection.executemany(
-                    "UPDATE users SET role='admin' WHERE lower(email)=lower(?)",
-                    [(email,) for email in settings.admin_emails],
-                )
+            connection.execute("DELETE FROM sessions WHERE revoked=TRUE OR expires_at<=CURRENT_TIMESTAMP")
+            connection.execute("DELETE FROM password_resets WHERE used=TRUE OR expires_at<=CURRENT_TIMESTAMP")
+            connection.execute("DELETE FROM email_verification_tokens WHERE used=TRUE OR expires_at<=CURRENT_TIMESTAMP")
             connection.commit()
             return
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
@@ -86,15 +84,11 @@ def init_db() -> None:
         audit_columns = {row[1] for row in connection.execute("PRAGMA table_info(audit_logs)")}
         if "metadata" not in audit_columns:
             connection.execute("ALTER TABLE audit_logs ADD COLUMN metadata TEXT")
-        # ADMIN_EMAILS is bootstrap provisioning only; authorization checks role.
-        if settings.admin_emails:
-            connection.executemany(
-                "UPDATE users SET role='admin' WHERE lower(email)=lower(?)",
-                [(email,) for email in settings.admin_emails],
-            )
         connection.execute(
             "DELETE FROM password_resets WHERE used=1 OR expires_at<=datetime('now')"
         )
+        connection.execute("DELETE FROM sessions WHERE revoked=1 OR expires_at<=datetime('now')")
+        connection.execute("DELETE FROM email_verification_tokens WHERE used=1 OR expires_at<=datetime('now')")
 
 
 @contextmanager

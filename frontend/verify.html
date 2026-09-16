@@ -1,9 +1,8 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <title>Verify email</title>
-<p id="status">Verifying your email…</p>
-<script>
-const token=new URLSearchParams(window.location.search).get('token')||'';
-fetch('/auth/verify-email?token_value='+encodeURIComponent(token),{method:'POST'}).then(async response=>{document.querySelector('#status').textContent=(await response.json()).message||'Request completed'});
-</script>
+<link rel="stylesheet" href="/app/app.css">
+<p id="status">Verifying your email...</p>
+<script src="/app/verify.js"></script>
