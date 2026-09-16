@@ -13,6 +13,7 @@ def test_register_and_change_reject_breached(monkeypatch):
     monkeypatch.setattr(auth, "breach_checker", NoBreach())
     with TestClient(app) as client:
         assert client.post("/auth/register", json={"email": "breach-flow@example.com", "password": "correct horse battery staple"}).status_code == 201
+        client.post("/auth/login", json={"email": "breach-flow@example.com", "password": "correct horse battery staple"})
         monkeypatch.setattr(auth, "breach_checker", Breached())
         csrf = client.get("/csrf").json()["csrf_token"]
         assert client.post("/auth/change-password", headers={"X-CSRF-Token": csrf},

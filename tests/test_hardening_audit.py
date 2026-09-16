@@ -35,6 +35,7 @@ def test_admin_uses_role_not_email(monkeypatch):
             json={"email": "role-test@example.com", "password": "correct horse battery staple"},
         )
         assert response.status_code == 201
+        client.post("/auth/login", json={"email": "role-test@example.com", "password": "correct horse battery staple"})
         with transaction() as connection:
             connection.execute(
                 "UPDATE users SET role='user' WHERE email=?",
@@ -50,6 +51,7 @@ def test_unverified_admin_cannot_access_admin(monkeypatch):
             "email": "unverified-admin@example.com",
             "password": "correct horse battery staple",
         })
+        client.post("/auth/login", json={"email": "unverified-admin@example.com", "password": "correct horse battery staple"})
         with transaction() as db:
             db.execute("UPDATE users SET role='admin', email_verified=FALSE WHERE email=?",
                        ("unverified-admin@example.com",))

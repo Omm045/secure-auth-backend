@@ -37,7 +37,11 @@ deployments must set the effective frontend URL to HTTPS. Public registration
 always creates a normal, unverified user; administrator provisioning is an
 explicit trusted bootstrap action (`python -m scripts.provision_admin
 admin@example.com`) and admin routes require verification. `ADMIN_EMAILS` is
-not a role-granting mechanism.
+not a role-granting mechanism. Registration no longer creates an authenticated
+session; users log in after verification. Forgot-password requests return the
+same generic response for known and unknown addresses, and email delivery is
+queued as a FastAPI background task; deployment-level timing variance can still
+exist because this is not a durable external queue.
 
 ## Test
 `python -m pytest -q`

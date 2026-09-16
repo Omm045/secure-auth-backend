@@ -12,7 +12,8 @@ def create_session(user_id):
     return raw,exp
 
 def current_user(request:Request):
-    raw=request.cookies.get("session") or request.headers.get("Authorization","").removeprefix("Bearer ").strip()
+    cookie_name = "__Host-session" if settings.environment == "production" else "session"
+    raw=request.cookies.get(cookie_name) or request.headers.get("Authorization","").removeprefix("Bearer ").strip()
     if not raw: raise HTTPException(401,"Authentication required")
     with transaction() as c:
         row=c.execute("SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.revoked=FALSE AND s.expires_at>?",(token_hash(raw),datetime.now(timezone.utc).isoformat())).fetchone()
@@ -20,6 +21,7 @@ def current_user(request:Request):
     return row
 
 def revoke(request):
-    raw=request.cookies.get("session") or request.headers.get("Authorization","").removeprefix("Bearer ").strip()
+    cookie_name = "__Host-session" if settings.environment == "production" else "session"
+    raw=request.cookies.get(cookie_name) or request.headers.get("Authorization","").removeprefix("Bearer ").strip()
     if raw:
         with transaction() as c:c.execute("UPDATE sessions SET revoked=TRUE WHERE token_hash=?",(token_hash(raw),))
