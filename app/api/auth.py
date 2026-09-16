@@ -5,7 +5,6 @@ from app.database.connection import transaction
 from app.security.hashing import hash_password,verify_password
 from app.services.password_policy import validate_password,is_password_compromised
 from app.services.breach_checker import BreachChecker
-from sqlite3 import IntegrityError
 from app.services.session_service import create_session,current_user,revoke
 from app.services.audit_service import audit
 from app.security.rate_limit import (
@@ -36,13 +35,13 @@ def set_session(response,raw,exp): set_session_cookie(response, raw, exp)
 def register(data:Credentials,request:Request,response:Response):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="register",identity=str(data.email)); reject_password(data.password)
     with transaction() as c:
-        try:
-            email = data.email.lower()
-            role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
-            c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,0)",
-                      (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
-            uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
-        except IntegrityError: raise HTTPException(409,"Email already registered")
+        email = data.email.lower()
+        if c.execute("SELECT 1 FROM users WHERE lower(email)=lower(?)", (email,)).fetchone():
+            raise HTTPException(409, "Email already registered")
+        role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
+        c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,0)",
+                  (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
+        uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
     issue_verification_token(uid, email)
     raw,exp=create_session(uid); set_session(response,raw,exp); audit(uid,"register",request.client.host if request.client else None)
     return {"id":uid,"email":data.email.lower(),"email_verified":False}

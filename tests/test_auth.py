@@ -18,6 +18,14 @@ def test_register_login_logout_and_bearer():
         token=r.cookies['session']; c.post('/auth/logout',headers={'X-CSRF-Token':csrf,'Authorization':'Bearer '+token}); assert c.get('/auth/me').status_code==401
         assert c.post('/auth/login',json={'email':'x@example.com','password':'abcdefgh'}).status_code==200
 
+def test_duplicate_registration_returns_conflict():
+    with TestClient(app) as c:
+        payload = {'email': 'duplicate@example.com', 'password': 'abcdefgh'}
+        assert c.post('/auth/register', json=payload).status_code == 201
+        response = c.post('/auth/register', json=payload)
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Email already registered"
+
 def test_disabled_login_and_last_login():
     with TestClient(app) as c:
         c.post('/auth/register',json={'email':'disabled@example.com','password':'abcdefgh'})
