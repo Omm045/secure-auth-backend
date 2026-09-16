@@ -16,6 +16,9 @@ Run `python -m scripts.migrate` as a deployment step before starting production
 replicas. Production startup does not run Alembic migrations, avoiding competing
 migration runners; development and test startup continues to initialize the
 schema automatically.
+The current transaction wrapper opens a PostgreSQL connection per transaction;
+deployments should size database capacity accordingly or place a pooler such as
+PgBouncer in front of PostgreSQL rather than assuming application-side pooling.
 Production rate limiting fails closed if Redis is unavailable; development/test
 uses an in-process fallback. SMTP delivery is used for reset and verification
 messages. Newly registered users have reduced access until they verify their
