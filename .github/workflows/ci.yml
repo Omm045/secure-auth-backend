@@ -41,7 +41,7 @@ jobs:
           docker compose logs
           exit 1
       - env:
-          DATABASE_URL: postgresql+psycopg://auth:auth@localhost:5432/auth
+        DATABASE_URL: postgres://auth:auth@localhost:5432/auth
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: compose-test-secret
         run: python -m pytest -q

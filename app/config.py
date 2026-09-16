@@ -62,8 +62,10 @@ class Settings(BaseSettings):
                 raise ValueError("REDIS_URL is required in production")
             if not self.admin_emails:
                 raise ValueError("ADMIN_EMAILS must identify the initial role-provisioning accounts in production")
-            if self.database_url.startswith("sqlite://"):
-                raise ValueError("SQLite is supported only for development and tests")
+            if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+                raise ValueError(
+                    "DATABASE_URL must use postgresql:// or postgresql+psycopg:// in production"
+                )
             if not all((self.email_provider, self.smtp_host, self.smtp_username,
                         self.smtp_password, self.email_from)):
                 raise ValueError("SMTP email settings are required in production")
