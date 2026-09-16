@@ -4,19 +4,19 @@ from app.database.connection import transaction
 from app.security.tokens import token, token_hash
 import smtplib
 from email.message import EmailMessage
+from urllib.parse import quote
 
 
-def deliver_reset_token(email: str, raw_token: str) -> None:
-    """Send reset mail through SMTP without logging or persisting the token."""
+def _deliver(email: str, subject: str, body: str) -> None:
     if not settings.smtp_host:
         if settings.environment == "production":
             raise RuntimeError("SMTP is not configured")
         return
     message = EmailMessage()
-    message["Subject"] = "Password reset"
+    message["Subject"] = subject
     message["From"] = settings.email_from
     message["To"] = email
-    message.set_content("Use the password reset token in your trusted client.")
+    message.set_content(body)
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
         server.starttls()
         if settings.smtp_username:
@@ -24,8 +24,16 @@ def deliver_reset_token(email: str, raw_token: str) -> None:
         server.send_message(message)
 
 
+def deliver_reset_token(email: str, raw_token: str) -> None:
+    """Send a usable reset link without logging or persisting the token."""
+    link = f"{settings.app_base_url.rstrip('/')}/password/reset?token={quote(raw_token)}"
+    _deliver(email, "Password reset", f"Reset your password using this link:\n{link}")
+
+
 def deliver_verification_token(email: str, raw_token: str) -> None:
-    deliver_reset_token(email, raw_token)
+    """Send a usable verification link without logging or persisting the token."""
+    link = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token_value={quote(raw_token)}"
+    _deliver(email, "Verify your email", f"Verify your email using this link:\n{link}")
 
 
 def issue_verification_token(user_id: int, email: str) -> None:

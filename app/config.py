@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     email_from: str | None = None
+    app_base_url: str = "http://localhost:8000"
     sentry_dsn: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
@@ -66,6 +67,8 @@ class Settings(BaseSettings):
             if not all((self.email_provider, self.smtp_host, self.smtp_username,
                         self.smtp_password, self.email_from)):
                 raise ValueError("SMTP email settings are required in production")
+            if not self.app_base_url.startswith("https://"):
+                raise ValueError("APP_BASE_URL must be an HTTPS URL in production")
         return self
 
 
