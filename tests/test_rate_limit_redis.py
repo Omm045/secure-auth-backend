@@ -1,0 +1,35 @@
+from app.config import settings
+from app.security import rate_limit
+import pytest
+
+
+class FakeRedis:
+    def __init__(self):
+        self.values = {}
+    def get(self, key):
+        return self.values.get(key)
+    def incr(self, key):
+        self.values[key] = int(self.values.get(key, 0)) + 1
+        return self.values[key]
+    def expire(self, key, seconds):
+        pass
+    def delete(self, key):
+        self.values.pop(key, None)
+
+
+def test_account_failures_are_shared_through_redis(monkeypatch):
+    client = FakeRedis()
+    monkeypatch.setattr(settings, "redis_url", "redis://test")
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(rate_limit, "_redis", client)
+    rate_limit._account_failures.clear()
+
+    for _ in range(29):
+        rate_limit.record_account_failure("shared@example.com")
+    rate_limit.enforce_account_failure_limit("shared@example.com", 10)
+    rate_limit.record_account_failure("shared@example.com")
+    with pytest.raises(Exception) as error:
+        rate_limit.enforce_account_failure_limit("shared@example.com", 10)
+
+    assert client.values["account-failures:shared@example.com"] == 30
+    assert error.value.status_code == 429
