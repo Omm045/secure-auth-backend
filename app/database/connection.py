@@ -7,15 +7,28 @@ from app.config import settings
 
 def db_path() -> str:
     url = settings.database_url
-    return url.removeprefix("sqlite:///") if url.startswith("sqlite:///") else ":memory:"
+    if url.startswith("sqlite:///"):
+        return url.removeprefix("sqlite:///")
+    raise ValueError(
+        "Unsupported DATABASE_URL scheme; expected sqlite:///..., postgresql://..., "
+        "postgresql+psycopg://..., or postgres://..."
+    )
 
 
 def connect():
-    if settings.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+    database_url = settings.database_url
+    if database_url.startswith("postgres://"):
+        database_url = "postgresql://" + database_url.removeprefix("postgres://")
+    if database_url.startswith(("postgresql://", "postgresql+psycopg://")):
         import psycopg
         from psycopg.rows import dict_row
-        url = settings.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+        url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
         return _PostgresConnection(psycopg.connect(url, row_factory=dict_row))
+    if not database_url.startswith("sqlite:///"):
+        raise ValueError(
+            "Unsupported DATABASE_URL scheme; expected sqlite:///..., postgresql://..., "
+            "postgresql+psycopg://..., or postgres://..."
+        )
     connection = sqlite3.connect(db_path(), timeout=10, isolation_level="DEFERRED")
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")

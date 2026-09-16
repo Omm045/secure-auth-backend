@@ -4,12 +4,17 @@ from sqlalchemy import engine_from_config, pool
 from app.config import settings
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+database_url = settings.database_url
+if database_url.startswith("postgres://"):
+    database_url = "postgresql+psycopg://" + database_url.removeprefix("postgres://")
+elif database_url.startswith("postgresql://"):
+    database_url = "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+config.set_main_option("sqlalchemy.url", database_url)
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
 def run_migrations_offline():
-    context.configure(url=settings.database_url, target_metadata=None,
+    context.configure(url=database_url, target_metadata=None,
                       literal_binds=True, dialect_opts={"paramstyle": "named"})
     with context.begin_transaction():
         context.run_migrations()

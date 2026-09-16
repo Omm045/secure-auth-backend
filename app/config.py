@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     email_from: str | None = None
     app_base_url: str = "http://localhost:8000"
+    frontend_base_url: str | None = None
     sentry_dsn: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
@@ -62,13 +63,18 @@ class Settings(BaseSettings):
                 raise ValueError("REDIS_URL is required in production")
             if not self.admin_emails:
                 raise ValueError("ADMIN_EMAILS must identify the initial role-provisioning accounts in production")
-            if self.database_url.startswith("sqlite://"):
-                raise ValueError("SQLite is supported only for development and tests")
+            if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+                raise ValueError(
+                    "DATABASE_URL must use postgresql:// or postgresql+psycopg:// in production"
+                )
             if not all((self.email_provider, self.smtp_host, self.smtp_username,
                         self.smtp_password, self.email_from)):
                 raise ValueError("SMTP email settings are required in production")
             if not self.app_base_url.startswith("https://"):
                 raise ValueError("APP_BASE_URL must be an HTTPS URL in production")
+            frontend_url = self.frontend_base_url or self.app_base_url
+            if not frontend_url.startswith("https://"):
+                raise ValueError("FRONTEND_BASE_URL must be an HTTPS URL in production")
         return self
 
 

@@ -1,4 +1,5 @@
 from datetime import datetime,timedelta,timezone
+import sqlite3
 from fastapi import APIRouter,Request,Response,HTTPException,Depends
 from pydantic import BaseModel,EmailStr
 from app.database.connection import transaction
@@ -16,6 +17,7 @@ from app.config import settings
 from app.security.cookies import set_session_cookie, clear_session_cookie
 from app.services.reset_service import issue_verification_token
 from app.security.tokens import token_hash
+from psycopg.errors import UniqueViolation
 router=APIRouter(prefix="/auth",tags=["auth"])
 breach_checker = BreachChecker()
 def reject_password(password, user_id=None):
@@ -35,14 +37,17 @@ def set_session(response,raw,exp): set_session_cookie(response, raw, exp)
 @router.post("/register",status_code=201)
 def register(data:Credentials,request:Request,response:Response):
     enforce_rate_limit(request,settings.rate_limit_per_minute,scope="register",identity=str(data.email)); reject_password(data.password)
-    with transaction() as c:
-        email = data.email.lower()
-        if c.execute("SELECT 1 FROM users WHERE lower(email)=lower(?)", (email,)).fetchone():
-            raise HTTPException(409, "Email already registered")
-        role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
-        c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,FALSE)",
-                  (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
-        uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
+    try:
+        with transaction() as c:
+            email = data.email.lower()
+            if c.execute("SELECT 1 FROM users WHERE lower(email)=lower(?)", (email,)).fetchone():
+                raise HTTPException(409, "Email already registered")
+            role = "admin" if email in {item.lower() for item in settings.admin_emails} else "user"
+            c.execute("INSERT INTO users(email,password_hash,created_at,role,email_verified) VALUES(?,?,?,?,FALSE)",
+                      (email,hash_password(data.password),datetime.now(timezone.utc).isoformat(),role))
+            uid=c.execute("SELECT id FROM users WHERE email=?",(email,)).fetchone()[0 if hasattr(c, "cursor") else "id"]
+    except (sqlite3.IntegrityError, UniqueViolation) as exc:
+        raise HTTPException(409, "Email already registered") from exc
     issue_verification_token(uid, email)
     raw,exp=create_session(uid); set_session(response,raw,exp); audit(uid,"register",request.client.host if request.client else None)
     return {"id":uid,"email":data.email.lower(),"email_verified":False}
