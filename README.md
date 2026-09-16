@@ -23,6 +23,8 @@ accounts in `tests/fixtures/sample_accounts.csv`; it returns addresses and
 breached/not-breached flags, never passwords. A minimal advisory zxcvbn meter
 is provided in `frontend/index.html`; server-side policy and breach checks
 remain authoritative.
+CI runs the complete test suite against both SQLite and the Docker Compose
+PostgreSQL/Redis services.
 
 ## Test
 `python -m pytest -q`
