@@ -41,7 +41,10 @@ not a role-granting mechanism. Registration no longer creates an authenticated
 session; users log in after verification. Forgot-password requests return the
 same generic response for known and unknown addresses, and email delivery is
 queued as a FastAPI background task; deployment-level timing variance can still
-exist because this is not a durable external queue.
+exist because this is not a durable external queue. Redis rate-limit counters
+use atomic increment/expiry scripting when supported, and production Redis
+failures fail closed. HIBP endpoints must use HTTPS, and API credential/token
+fields are length-bounded.
 
 ## Test
 `python -m pytest -q`

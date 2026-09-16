@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter,Request,Response,HTTPException,BackgroundTasks
-from pydantic import BaseModel,EmailStr
+from pydantic import BaseModel,EmailStr,Field
 from app.database.connection import transaction
 from app.security.tokens import token_hash
 from app.security.hashing import hash_password, verify_password
@@ -13,8 +13,12 @@ from app.services.reset_service import issue_reset_token
 from app.config import settings
 router=APIRouter(prefix="/password",tags=["password"])
 breach_checker=BreachChecker()
-class Email(BaseModel): email:EmailStr
-class Reset(BaseModel): token:str; new_password:str
+class Email(BaseModel):
+    email: EmailStr = Field(max_length=320)
+
+class Reset(BaseModel):
+    token: str = Field(min_length=20, max_length=256)
+    new_password: str = Field(max_length=128)
 DUMMY_RESET_HASH = "$argon2id$v=19$m=65536,t=3,p=4$u7Pu1zpy3Um6fOGyEpJIfA$HYGl3GFHFglhpCKLF2UHfunnxAzAzyCa8tBXLHS49sA"
 @router.post("/forgot")
 def forgot(data:Email,request:Request,background_tasks: BackgroundTasks):

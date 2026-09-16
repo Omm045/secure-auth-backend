@@ -17,6 +17,10 @@ class FakeRedis:
     def delete(self, key):
         self.values.pop(key, None)
 
+class AtomicFakeRedis(FakeRedis):
+    def eval(self, script, numkeys, key, ttl):
+        return self.incr(key)
+
 
 def test_account_failures_are_shared_through_redis(monkeypatch):
     client = FakeRedis()
@@ -35,3 +39,14 @@ def test_account_failures_are_shared_through_redis(monkeypatch):
     key = hashlib.sha256(b"shared@example.com").hexdigest()[:32]
     assert client.values[f"account-failures:{key}"] == 30
     assert error.value.status_code == 429
+
+def test_redis_increment_uses_atomic_script_when_available(monkeypatch):
+    client = AtomicFakeRedis()
+    monkeypatch.setattr(rate_limit, "_redis", client)
+    monkeypatch.setattr(settings, "redis_url", "redis://test")
+    rate_limit._hits.clear()
+    from fastapi import Request
+    scope = {"type": "http", "client": ("127.0.0.1", 1), "method": "POST", "path": "/"}
+    request = Request(scope)
+    rate_limit.enforce_rate_limit(request, 2, scope="atomic")
+    assert client.values

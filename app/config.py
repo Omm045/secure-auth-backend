@@ -72,6 +72,8 @@ class Settings(BaseSettings):
                 raise ValueError("SMTP email settings are required in production")
             if not self.app_base_url.startswith("https://"):
                 raise ValueError("APP_BASE_URL must be an HTTPS URL in production")
+            if not self.hibp_api_url.startswith("https://"):
+                raise ValueError("HIBP_API_URL must be an HTTPS URL in production")
             frontend_url = self.frontend_base_url or self.app_base_url
             if not frontend_url.startswith("https://"):
                 raise ValueError("FRONTEND_BASE_URL must be an HTTPS URL in production")

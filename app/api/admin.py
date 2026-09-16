@@ -24,8 +24,14 @@ def breach_report(request: Request, user=Depends(require_admin)):
     checker = BreachChecker()
     accounts = []
     sample_path = Path(__file__).parents[1] / "data" / "sample_accounts.csv"
-    for account in csv.DictReader(sample_path.open(newline="", encoding="utf-8")):
-        accounts.append({"email": account["email"], "breached": checker.is_breached(account["password"])})
+    try:
+        with sample_path.open(newline="", encoding="utf-8") as sample_file:
+            for account in csv.DictReader(sample_file):
+                accounts.append({"email": account["email"], "breached": checker.is_breached(account["password"])})
+    finally:
+        close = getattr(checker.client, "close", None)
+        if close:
+            close()
     breached = sum(item["breached"] for item in accounts)
     percentage = round((breached / len(accounts)) * 100, 2) if accounts else 0
     return {"summary": f"{percentage}% of test accounts use a breached password",
